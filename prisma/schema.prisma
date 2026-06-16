@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  legajo    String   @unique
+  password  String
+  name      String
+  role      String   // "ESTUDIANTE" o "BIBLIOTECARIA"
+  division  String?  // Ejemplo: "2° B"
+  progress  ReadingProgress[]
+  trophies  Trophy[]
+  createdAt DateTime @default(now())
+}
+
+model Text {
+  id        String   @id @default(uuid())
+  title     String
+  author    String
+  content   String
+  level     String   // "Crítico", "Básico", "Medio"
+  year      Int      // 1, 2, 3, 4, 5
+  challenges Challenge[]
+  progress  ReadingProgress[]
+}
+
+model Challenge {
+  id         String   @id @default(uuid())
+  textId     String
+  text       Text     @relation(fields: [textId], references: [id])
+  question   String
+  options    String   // JSON con las opciones
+  correctIdx Int      // Índice de la opción correcta
+}
+
+model ReadingProgress {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  textId    String
+  text      Text     @relation(fields: [textId], references: [id])
+  status    String   // "PENDIENTE", "INICIADO", "COMPLETADO"
+  audioUrl  String?  // URL de Vercel Blob
+  score     Int      @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+model Trophy {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  name      String
+  icon      String
+  earnedAt  DateTime @default(now())
+}

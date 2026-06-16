@@ -1,0 +1,404 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Lora:ital,wght@0,400;0,600;1,400&display=swap');
+
+:root {
+  --azul:       #1a3a6b;
+  --celeste:    #2d6a9f;
+  --cielo:      #e8f2fc;
+  --verde:      #2e8b57;
+  --verde-claro:#e6f4ed;
+  --dorado:     #e8a020;
+  --dorado-bg:  #fff8e6;
+  --rojo:       #c0392b;
+  --gris:       #f4f6f9;
+  --gris-texto: #6b7a8d;
+  --blanco:     #ffffff;
+  --sombra:     0 4px 20px rgba(26,58,107,0.10);
+  --sombra-lg:  0 8px 40px rgba(26,58,107,0.16);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Nunito', sans-serif;
+  background: #d8e8f4;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 10px 40px;
+}
+
+/* DEVICE FRAME */
+.device {
+  width: 100%;
+  max-width: 420px;
+  background: var(--blanco);
+  border-radius: 24px;
+  box-shadow: var(--sombra-lg);
+  overflow: hidden;
+  min-height: 780px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* TOP BAR */
+.topbar {
+  background: var(--azul);
+  color: white;
+  padding: 14px 18px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.topbar .back-btn {
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: white;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.topbar .back-btn:hover { background: rgba(255,255,255,0.25); }
+.topbar .logo-text { font-size: 15px; font-weight: 800; letter-spacing: 0.3px; flex:1; }
+.topbar .logo-text span { color: #7dc3f5; }
+.topbar .avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7dc3f5, #2d6a9f);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* CONTENT AREA */
+.screen {
+  flex: 1;
+  overflow-y: auto;
+  display: none;
+  flex-direction: column;
+}
+.screen.active { display: flex; }
+
+/* ===================== PANTALLA: LOGIN ===================== */
+#s-login {
+  background: linear-gradient(160deg, #1a3a6b 0%, #2d6a9f 60%, #5a9fd4 100%);
+  align-items: center;
+  justify-content: center;
+  padding: 40px 28px;
+  gap: 0;
+}
+.login-logo { font-size: 52px; margin-bottom: 8px; }
+.login-titulo { font-size: 26px; font-weight: 900; color: white; text-align: center; line-height: 1.1; }
+.login-sub { font-size: 13px; color: #a8d4f5; margin-bottom: 36px; text-align: center; margin-top: 4px; }
+.login-box {
+  background: white;
+  border-radius: 18px;
+  padding: 28px 24px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.login-box h3 { font-size: 15px; color: var(--azul); font-weight: 800; margin-bottom: 18px; }
+.campo { margin-bottom: 14px; }
+.campo label { display: block; font-size: 11px; font-weight: 700; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; }
+.campo input {
+  width: 100%; padding: 12px 14px; border: 2px solid #dde6f0; border-radius: 10px;
+  font-family: 'Nunito', sans-serif; font-size: 14px; color: var(--azul);
+  outline: none; transition: border 0.2s;
+}
+.campo input:focus { border-color: var(--celeste); }
+.btn-primary {
+  width: 100%; padding: 14px; background: var(--azul); color: white;
+  border: none; border-radius: 12px; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.2s;
+  margin-top: 6px;
+}
+.btn-primary:hover { background: var(--celeste); transform: translateY(-1px); }
+.login-footer { font-size: 11px; color: #a8d4f5; margin-top: 16px; text-align: center; }
+
+/* ===================== PANTALLA: HOME ===================== */
+#s-home { background: var(--gris); }
+.home-header {
+  background: linear-gradient(135deg, var(--azul), var(--celeste));
+  padding: 20px 20px 28px;
+  color: white;
+}
+.home-saludo { font-size: 13px; color: #a8d4f5; margin-bottom: 2px; }
+.home-nombre { font-size: 20px; font-weight: 900; }
+.home-stats {
+  display: flex; gap: 10px; margin-top: 16px;
+}
+.stat-pill {
+  background: rgba(255,255,255,0.15);
+  border-radius: 12px; padding: 8px 12px; flex: 1; text-align: center;
+}
+.stat-pill .num { font-size: 20px; font-weight: 900; display: block; }
+.stat-pill .lbl { font-size: 10px; color: #a8d4f5; }
+
+.home-body { padding: 16px; flex: 1; }
+.seccion-titulo {
+  font-size: 12px; font-weight: 800; color: var(--gris-texto);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin: 6px 0 12px;
+}
+
+/* TROFEOS STRIP */
+.trofeos-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 18px; }
+.trofeo-chip {
+  flex-shrink: 0; background: white; border-radius: 12px;
+  padding: 10px 12px; text-align: center; min-width: 72px;
+  box-shadow: var(--sombra);
+  border: 2px solid transparent;
+}
+.trofeo-chip.ganado { border-color: var(--dorado); background: var(--dorado-bg); }
+.trofeo-chip.bloqueado { opacity: 0.4; filter: grayscale(1); }
+.trofeo-chip .tro-emoji { font-size: 22px; display: block; }
+.trofeo-chip .tro-nom { font-size: 9px; font-weight: 700; color: var(--azul); margin-top: 4px; line-height: 1.2; }
+
+/* TEXTO CARD */
+.texto-card {
+  background: white; border-radius: 16px; padding: 16px;
+  box-shadow: var(--sombra); margin-bottom: 12px; cursor: pointer;
+  transition: all 0.2s; border: 2px solid transparent;
+}
+.texto-card:hover { border-color: var(--celeste); transform: translateY(-2px); }
+.texto-card .tc-head { display: flex; align-items: flex-start; gap: 10px; }
+.texto-card .tc-icono {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: var(--cielo); display: flex; align-items: center;
+  justify-content: center; font-size: 20px; flex-shrink: 0;
+}
+.texto-card .tc-info { flex: 1; }
+.texto-card .tc-titulo { font-size: 14px; font-weight: 800; color: var(--azul); line-height: 1.2; }
+.texto-card .tc-autor { font-size: 11px; color: var(--gris-texto); margin-top: 2px; }
+.texto-card .tc-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.tag {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+}
+.tag.pendiente { background: #fff0e0; color: #b06000; }
+.tag.iniciado  { background: #e0f0ff; color: #0060b0; }
+.tag.completo  { background: var(--verde-claro); color: var(--verde); }
+.tag.libro     { background: #f0e8ff; color: #6030a0; }
+.tag.retos     { background: var(--cielo); color: var(--celeste); }
+
+/* BARRA PROGRESO */
+.progreso-barra {
+  height: 5px; background: #dde6f0; border-radius: 10px; margin-top: 10px; overflow: hidden;
+}
+.progreso-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg, var(--celeste), #7dc3f5); }
+
+/* ===================== PANTALLA: TEXTO ===================== */
+#s-texto { background: white; }
+.texto-hero {
+  background: linear-gradient(135deg, var(--azul), var(--celeste));
+  padding: 20px; color: white;
+}
+.texto-hero .th-label { font-size: 10px; color: #a8d4f5; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+.texto-hero .th-titulo { font-size: 19px; font-weight: 900; margin-top: 4px; line-height: 1.2; }
+.texto-hero .th-autor { font-size: 12px; color: #a8d4f5; margin-top: 3px; }
+.texto-hero .th-chips { display: flex; gap: 6px; margin-top: 12px; }
+.chip-white {
+  background: rgba(255,255,255,0.18); border-radius: 20px; padding: 4px 10px;
+  font-size: 10px; font-weight: 700; color: white;
+}
+
+.texto-body { padding: 20px; flex: 1; }
+.texto-contenido {
+  font-family: 'Lora', serif; font-size: 15px; line-height: 1.8;
+  color: #2c3e50; margin-bottom: 20px;
+  padding: 16px; background: #fafbfd; border-radius: 12px;
+  border-left: 3px solid var(--celeste);
+}
+
+/* GRABADORA */
+.grabadora {
+  background: var(--cielo); border-radius: 16px; padding: 20px;
+  text-align: center; margin-bottom: 20px;
+}
+.grab-titulo { font-size: 13px; font-weight: 800; color: var(--azul); margin-bottom: 4px; }
+.grab-sub { font-size: 11px; color: var(--gris-texto); margin-bottom: 16px; }
+.grab-btn-mic {
+  width: 72px; height: 72px; border-radius: 50%; border: none;
+  background: var(--azul); color: white; font-size: 30px;
+  cursor: pointer; margin: 0 auto 12px; display: flex;
+  align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(26,58,107,0.3);
+  transition: all 0.2s;
+}
+.grab-btn-mic:hover { background: var(--celeste); transform: scale(1.05); }
+.grab-btn-mic.grabando {
+  background: var(--rojo); animation: pulso 1s infinite;
+}
+@keyframes pulso {
+  0%,100% { box-shadow: 0 4px 20px rgba(192,57,43,0.3); }
+  50% { box-shadow: 0 4px 30px rgba(192,57,43,0.6); transform: scale(1.08); }
+}
+.grab-estado { font-size: 12px; color: var(--gris-texto); height: 18px; }
+.grab-estado.activo { color: var(--rojo); font-weight: 700; }
+
+.audio-player {
+  background: white; border-radius: 12px; padding: 12px 16px;
+  margin-top: 12px; display: none; align-items: center; gap: 10px;
+}
+.audio-player.visible { display: flex; }
+.play-btn {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--verde);
+  border: none; color: white; font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.audio-barra { flex: 1; height: 4px; background: #dde6f0; border-radius: 10px; overflow: hidden; }
+.audio-fill { height: 100%; background: var(--verde); width: 0%; transition: width 0.1s; }
+.audio-tiempo { font-size: 11px; color: var(--gris-texto); font-weight: 700; }
+
+.btn-regrabar {
+  width: 100%; padding: 11px; border: 2px solid var(--celeste); color: var(--celeste);
+  border-radius: 12px; background: transparent; font-family: 'Nunito', sans-serif;
+  font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 8px; transition: all 0.2s;
+}
+.btn-regrabar:hover { background: var(--cielo); }
+
+.btn-enviar {
+  width: 100%; padding: 14px; background: var(--verde); color: white;
+  border: none; border-radius: 12px; font-family: 'Nunito', sans-serif;
+  font-size: 15px; font-weight: 800; cursor: pointer; margin-top: 10px; transition: all 0.2s;
+}
+.btn-enviar:hover { background: #267a4d; }
+
+/* ===================== PANTALLA: RETOS ===================== */
+#s-retos { background: var(--gris); }
+.retos-header { padding: 20px; background: white; border-bottom: 1px solid #eee; }
+.retos-header h2 { font-size: 18px; font-weight: 900; color: var(--azul); }
+.retos-header p { font-size: 12px; color: var(--gris-texto); margin-top: 3px; }
+.retos-body { padding: 16px; flex: 1; }
+
+.reto-card {
+  background: white; border-radius: 14px; padding: 16px;
+  box-shadow: var(--sombra); margin-bottom: 12px;
+}
+.reto-card .rc-num {
+  font-size: 10px; font-weight: 800; color: var(--celeste);
+  text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+}
+.reto-card .rc-pregunta {
+  font-size: 14px; font-weight: 700; color: #2c3e50; margin-bottom: 12px; line-height: 1.4;
+}
+.opciones { display: flex; flex-direction: column; gap: 8px; }
+.opcion {
+  padding: 11px 14px; border: 2px solid #dde6f0; border-radius: 10px;
+  font-size: 13px; color: #2c3e50; cursor: pointer; transition: all 0.15s;
+  font-weight: 600;
+}
+.opcion:hover { border-color: var(--celeste); background: var(--cielo); }
+.opcion.correcta { border-color: var(--verde); background: var(--verde-claro); color: var(--verde); }
+.opcion.incorrecta { border-color: var(--rojo); background: #fdf0ef; color: var(--rojo); }
+
+.feedback-msg {
+  margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+  font-size: 12px; font-weight: 700; display: none;
+}
+.feedback-msg.bien { background: var(--verde-claro); color: var(--verde); display: block; }
+.feedback-msg.mal  { background: #fdf0ef; color: var(--rojo); display: block; }
+
+/* RETO ESPECIAL LIBRO */
+.reto-libro {
+  background: #f0e8ff; border: 2px solid #c0a0e0; border-radius: 14px;
+  padding: 16px; margin-bottom: 12px;
+}
+.reto-libro .rl-icono { font-size: 28px; margin-bottom: 6px; }
+.reto-libro .rl-titulo { font-size: 14px; font-weight: 800; color: #6030a0; margin-bottom: 4px; }
+.reto-libro .rl-texto { font-size: 12px; color: #6030a0; line-height: 1.5; margin-bottom: 12px; }
+.btn-biblio {
+  padding: 10px 18px; background: #6030a0; color: white;
+  border: none; border-radius: 10px; font-family: 'Nunito', sans-serif;
+  font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.btn-biblio:hover { background: #4a2080; }
+
+/* ===================== PANTALLA: TROFEO ===================== */
+#s-trofeo {
+  background: linear-gradient(160deg, #1a3a6b, #2d6a9f, #5a9fd4);
+  align-items: center; justify-content: center; padding: 40px 28px;
+  text-align: center;
+}
+.trofeo-anim { font-size: 80px; animation: bounceIn 0.6s; margin-bottom: 8px; }
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.trofeo-titulo { font-size: 28px; font-weight: 900; color: white; margin-bottom: 6px; }
+.trofeo-subtitulo { font-size: 14px; color: #a8d4f5; margin-bottom: 6px; }
+.trofeo-nom { font-size: 20px; font-weight: 800; color: var(--dorado); margin-bottom: 20px; }
+.trofeo-desc { font-size: 13px; color: #c8dff5; line-height: 1.6; margin-bottom: 32px; max-width: 280px; }
+.trofeo-puntos {
+  background: rgba(255,255,255,0.12); border-radius: 16px; padding: 14px 24px;
+  margin-bottom: 28px; display: inline-block;
+}
+.trofeo-puntos .pts-num { font-size: 32px; font-weight: 900; color: var(--dorado); }
+.trofeo-puntos .pts-lbl { font-size: 11px; color: #a8d4f5; }
+.btn-continuar {
+  width: 100%; max-width: 280px; padding: 15px; background: white; color: var(--azul);
+  border: none; border-radius: 14px; font-family: 'Nunito', sans-serif;
+  font-size: 16px; font-weight: 900; cursor: pointer; transition: all 0.2s;
+}
+.btn-continuar:hover { background: #eef4fb; transform: translateY(-2px); }
+
+/* ===================== PANTALLA: ESTADÍSTICAS ===================== */
+#s-stats { background: var(--gris); }
+.stats-header { padding: 20px; background: white; border-bottom: 1px solid #eee; }
+.stats-header h2 { font-size: 18px; font-weight: 900; color: var(--azul); }
+.stats-header p { font-size: 12px; color: var(--gris-texto); margin-top: 3px; }
+.stats-body { padding: 16px; flex: 1; }
+
+.stat-card {
+  background: white; border-radius: 14px; padding: 16px;
+  box-shadow: var(--sombra); margin-bottom: 12px;
+}
+.stat-card h3 { font-size: 12px; font-weight: 800; color: var(--gris-texto); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; }
+.stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.stat-row .sr-nombre { font-size: 13px; color: #2c3e50; font-weight: 600; }
+.stat-row .sr-barra { flex: 1; height: 8px; background: #eee; border-radius: 10px; margin: 0 10px; overflow: hidden; }
+.stat-row .sr-fill { height: 100%; border-radius: 10px; background: linear-gradient(90deg, var(--celeste), #7dc3f5); }
+.stat-row .sr-pct { font-size: 12px; font-weight: 800; color: var(--celeste); min-width: 34px; text-align: right; }
+
+.alumno-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 0;
+  border-bottom: 1px solid #eee;
+}
+.alumno-row:last-child { border-bottom: none; }
+.alumno-ava {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--cielo), var(--celeste));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.alumno-nombre { font-size: 13px; font-weight: 700; color: #2c3e50; }
+.alumno-nivel { font-size: 11px; color: var(--gris-texto); }
+.alumno-trofeos { margin-left: auto; font-size: 13px; }
+
+/* NAV BOTTOM */
+.nav-bottom {
+  background: white; border-top: 1px solid #eee;
+  display: flex; padding: 10px 0 14px;
+  flex-shrink: 0;
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  gap: 3px; cursor: pointer; transition: all 0.15s;
+  border: none; background: none; font-family: 'Nunito', sans-serif;
+}
+.nav-item .nav-ico { font-size: 20px; }
+.nav-item .nav-lbl { font-size: 10px; font-weight: 700; color: var(--gris-texto); }
+.nav-item.active .nav-lbl { color: var(--azul); }
+.nav-item.active .nav-ico { transform: translateY(-2px); }
+
+/* SIMULATOR LABEL */
+.sim-label {
+  font-size: 11px; color: #6b8aaa; font-weight: 700;
+  text-align: center; margin-bottom: 10px; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
