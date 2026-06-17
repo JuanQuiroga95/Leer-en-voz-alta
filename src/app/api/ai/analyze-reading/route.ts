@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
+import { toFile } from 'openai/uploads';
+
+// Inicializamos usando la librería de OpenAI, pero apuntamos a los servidores de Groq.
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+});
 
 export async function POST(request: Request) {
   try {
@@ -11,72 +18,68 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan datos (audio o referenceText)' }, { status: 400 });
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return NextResponse.json({ error: 'Falta configurar GEMINI_API_KEY en Vercel.' }, { status: 500 });
+    if (!process.env.GROQ_API_KEY) {
+      return NextResponse.json({ error: "Falta configurar GROQ_API_KEY en Vercel." }, { status: 500 });
     }
 
     const buffer = await audioFile.arrayBuffer();
-    
-    // 1. Instanciar Gemini
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash-latest',
-      generationConfig: { responseMimeType: "application/json" }
-    });
+    const fileForGroq = await toFile(Buffer.from(buffer), 'audio.webm', { type: audioFile.type || 'audio/webm' });
 
-    const base64Audio = Buffer.from(buffer).toString('base64');
+    // 1. Transcribe audio with Whisper (en Groq)
+    let transcriptText = '';
+    try {
+      const transcription = await groq.audio.transcriptions.create({
+        file: fileForGroq,
+        model: 'whisper-large-v3', // Modelo abierto ultra rápido en Groq
+        language: 'es',
+      });
+      transcriptText = transcription.text;
+    } catch (e: any) {
+      console.error("Groq Whisper Error:", e);
+      return NextResponse.json({ error: `Error Transcripción Groq: ${e.message}` }, { status: 500 });
+    }
 
-    // 2. Analizar el audio directamente con Gemini Multimodal
-    const prompt = `
-Eres un profesor experto en evaluar fluidez lectora en niños de secundaria.
-Vas a escuchar un audio donde un alumno lee en voz alta. 
-El texto original que debía leer es el siguiente:
-"${referenceText}"
-
-Compara lo que escuchas con el texto original y devuelve un análisis en formato JSON estricto con esta estructura:
-{
-  "transcription": "La transcripción exacta de lo que escuchaste decir al alumno en el audio",
-  "score": (entero del 0 al 100 evaluando precisión y completitud),
-  "omittedWords": [arreglo de palabras del texto original que faltaron],
-  "inventedWords": [arreglo de palabras que leyó mal o inventó],
-  "feedback": "mensaje corto motivador y constructivo para el estudiante en español"
-}`;
-
+    // 2. Analyze reading fluency and accuracy against referenceText with LLaMA 3 (en Groq)
     let resultString = '';
     try {
-      const result = await model.generateContent([
-        {
-          inlineData: {
-            data: base64Audio,
-            mimeType: audioFile.type || 'audio/webm',
+      const completion = await groq.chat.completions.create({
+        model: 'llama3-8b-8192', // Modelo Llama 3 en Groq
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: `Eres un profesor experto en evaluar fluidez lectora en niños de secundaria.
+Vas a recibir el texto original que el alumno debía leer, y la transcripción de lo que realmente leyó.
+Compara ambos textos y devuelve un análisis en formato JSON estricto con la siguiente estructura:
+{
+  "score": (entero del 0 al 100 evaluando precisión y completitud),
+  "omittedWords": [arreglo de palabras que faltaron],
+  "inventedWords": [arreglo de palabras que leyó mal o inventó],
+  "feedback": "mensaje corto motivador y constructivo para el estudiante en español"
+}`
           },
-        },
-        { text: prompt }
-      ]);
-      resultString = result.response.text();
+          {
+            role: 'user',
+            content: `Texto original:\n${referenceText}\n\nTranscripción del alumno:\n${transcriptText}`
+          }
+        ]
+      });
+      resultString = completion.choices[0]?.message?.content || '{}';
     } catch (e: any) {
-      console.error("Gemini Error:", e);
-      return NextResponse.json({ error: `Error de Gemini: ${e.message}` }, { status: 500 });
+      console.error("Groq LLaMA Error:", e);
+      return NextResponse.json({ error: `Error Análisis Groq: ${e.message}` }, { status: 500 });
     }
 
-    let parsedResult;
+    let analysis;
     try {
-      parsedResult = JSON.parse(resultString);
-      if (typeof parsedResult.score !== 'number') parsedResult.score = 0;
+      analysis = JSON.parse(resultString);
+      if (typeof analysis.score !== 'number') analysis.score = 0;
     } catch (e) {
       console.error("JSON Parse Error:", e);
-      return NextResponse.json({ error: "El análisis devuelto por la IA no tiene el formato correcto." }, { status: 500 });
+      return NextResponse.json({ error: "El análisis devuelto no tiene el formato correcto." }, { status: 500 });
     }
 
-    const transcriptText = parsedResult.transcription || "Transcripción no disponible";
-    const analysis = {
-      score: parsedResult.score,
-      omittedWords: parsedResult.omittedWords || [],
-      inventedWords: parsedResult.inventedWords || [],
-      feedback: parsedResult.feedback || "Sin feedback"
-    };
-
-    // 3. Subir a Vercel Blob (si está configurado)
+    // 3. Upload to Vercel Blob
     let audioUrl = null;
     try {
       if (process.env.BLOB_READ_WRITE_TOKEN) {
