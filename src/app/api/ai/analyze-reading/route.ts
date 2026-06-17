@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-import { toFile } from 'openai/uploads';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export async function POST(request: Request) {
   try {
@@ -16,66 +11,72 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faltan datos (audio o referenceText)' }, { status: 400 });
     }
 
-    // Convert Blob to File object for OpenAI SDK
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'Falta configurar GEMINI_API_KEY en Vercel.' }, { status: 500 });
+    }
+
     const buffer = await audioFile.arrayBuffer();
     
-    // Convert Buffer to File for OpenAI SDK using their helper
-    const fileForOpenAI = await toFile(Buffer.from(buffer), 'audio.webm', { type: audioFile.type || 'audio/webm' });
+    // 1. Instanciar Gemini
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: { responseMimeType: "application/json" }
+    });
 
-    let transcriptText = '';
-    try {
-      const transcription = await openai.audio.transcriptions.create({
-        file: fileForOpenAI,
-        model: 'whisper-1',
-        language: 'es',
-      });
-      transcriptText = transcription.text;
-    } catch (e: any) {
-      console.error("OpenAI Whisper Error:", e);
-      return NextResponse.json({ error: `Error Whisper: ${e.message}` }, { status: 500 });
-    }
+    const base64Audio = Buffer.from(buffer).toString('base64');
 
-    // 2. Analyze reading fluency and accuracy against referenceText
-    let resultString = '';
-    try {
-      const completion = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content: `Eres un profesor experto en evaluar fluidez lectora en niños de secundaria.
-Vas a recibir el texto original que el alumno debía leer, y la transcripción de lo que realmente leyó.
-Compara ambos textos y devuelve un análisis en formato JSON estricto con la siguiente estructura:
+    // 2. Analizar el audio directamente con Gemini Multimodal
+    const prompt = `
+Eres un profesor experto en evaluar fluidez lectora en niños de secundaria.
+Vas a escuchar un audio donde un alumno lee en voz alta. 
+El texto original que debía leer es el siguiente:
+"${referenceText}"
+
+Compara lo que escuchas con el texto original y devuelve un análisis en formato JSON estricto con esta estructura:
 {
+  "transcription": "La transcripción exacta de lo que escuchaste decir al alumno en el audio",
   "score": (entero del 0 al 100 evaluando precisión y completitud),
-  "omittedWords": [arreglo de palabras que faltaron],
+  "omittedWords": [arreglo de palabras del texto original que faltaron],
   "inventedWords": [arreglo de palabras que leyó mal o inventó],
   "feedback": "mensaje corto motivador y constructivo para el estudiante en español"
-}`
+}`;
+
+    let resultString = '';
+    try {
+      const result = await model.generateContent([
+        {
+          inlineData: {
+            data: base64Audio,
+            mimeType: audioFile.type || 'audio/webm',
           },
-          {
-            role: 'user',
-            content: `Texto original:\n${referenceText}\n\nTranscripción del alumno:\n${transcriptText}`
-          }
-        ]
-      });
-      resultString = completion.choices[0]?.message?.content || '{}';
+        },
+        { text: prompt }
+      ]);
+      resultString = result.response.text();
     } catch (e: any) {
-      console.error("OpenAI GPT-4o Error:", e);
-      return NextResponse.json({ error: `Error GPT-4o: ${e.message}` }, { status: 500 });
+      console.error("Gemini Error:", e);
+      return NextResponse.json({ error: `Error de Gemini: ${e.message}` }, { status: 500 });
     }
 
-    let analysis;
+    let parsedResult;
     try {
-      analysis = JSON.parse(resultString);
-      if (typeof analysis.score !== 'number') analysis.score = 0;
+      parsedResult = JSON.parse(resultString);
+      if (typeof parsedResult.score !== 'number') parsedResult.score = 0;
     } catch (e) {
       console.error("JSON Parse Error:", e);
-      return NextResponse.json({ error: "El análisis devuelto por OpenAI no tiene el formato correcto." }, { status: 500 });
+      return NextResponse.json({ error: "El análisis devuelto por la IA no tiene el formato correcto." }, { status: 500 });
     }
 
-    // 3. Upload to Vercel Blob
+    const transcriptText = parsedResult.transcription || "Transcripción no disponible";
+    const analysis = {
+      score: parsedResult.score,
+      omittedWords: parsedResult.omittedWords || [],
+      inventedWords: parsedResult.inventedWords || [],
+      feedback: parsedResult.feedback || "Sin feedback"
+    };
+
+    // 3. Subir a Vercel Blob (si está configurado)
     let audioUrl = null;
     try {
       if (process.env.BLOB_READ_WRITE_TOKEN) {
@@ -88,7 +89,6 @@ Compara ambos textos y devuelve un análisis en formato JSON estricto con la sig
       }
     } catch (e: any) {
       console.error("Vercel Blob Upload Error:", e);
-      // No rompemos la app, solo no guardamos el audio
     }
 
     return NextResponse.json({
