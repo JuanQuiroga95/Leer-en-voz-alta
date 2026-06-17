@@ -6,12 +6,18 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  ADMIN
+  PROFESOR
+  ALUMNO
+}
+
 model User {
   id        String   @id @default(uuid())
   legajo    String   @unique
   password  String
   name      String
-  role      String   // "ESTUDIANTE" o "BIBLIOTECARIA"
+  role      Role     @default(ALUMNO)
   division  String?  // Ejemplo: "2° B"
   progress  ReadingProgress[]
   trophies  Trophy[]
@@ -39,15 +45,24 @@ model Challenge {
 }
 
 model ReadingProgress {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  textId    String
-  text      Text     @relation(fields: [textId], references: [id])
-  status    String   // "PENDIENTE", "INICIADO", "COMPLETADO"
-  audioUrl  String?  // URL de Vercel Blob
-  score     Int      @default(0)
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  textId     String
+  text       Text     @relation(fields: [textId], references: [id])
+  status     String   // "PENDIENTE", "INICIADO", "COMPLETADO"
+  audioUrl   String?  // URL de Vercel Blob
+  score      Int      @default(0)
+  
+  // Feedback manual del Profesor
+  feedback   String?
+  grade      Int?     // Nota o puntaje dado por el profesor
+  
+  // Análisis de IA (OpenAI Whisper + GPT)
+  aiScore    Int?
+  aiAnalysis Json?    // JSON con errores, palabras omitidas, etc.
+
+  updatedAt  DateTime @updatedAt
 }
 
 model Trophy {
