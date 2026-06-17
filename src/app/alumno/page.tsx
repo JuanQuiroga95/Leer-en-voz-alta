@@ -66,16 +66,29 @@ export default function AlumnoPanel() {
   const handleEnviarRetos = async () => {
     if (audioBlob) {
       try {
+        setAudioVisible(false); // Hide while loading
+        setGrabando(false);
+        alert('Analizando tu lectura con Inteligencia Artificial... por favor espera unos segundos.');
+
         const formData = new FormData();
-        formData.append('file', audioBlob, `audio_${Date.now()}.webm`);
-        // We will pass the audio blob as body for Vercel Blob directly or through FormData
-        // Wait, Vercel Blob route expects the raw body if we use `request.body`.
-        await fetch(`/api/upload?filename=audio_${Date.now()}.webm`, { 
+        formData.append('audio', audioBlob, `audio_${Date.now()}.webm`);
+        // We will need the reference text for the AI to compare
+        const referenceText = 'Un día, un pequeño ratón corrió sobre el cuerpo dormido de un poderoso león y lo despertó. El león lo atrapó con su enorme garra y rugió: "¡Serás mi almuerzo!". El ratón, temblando, suplicó: "¡Por favor, perdóname! Algún día te podré ayudar." El león soltó una carcajada, pero lo dejó libre. Días después, unos cazadores atraparon al león con una red. El ratón escuchó sus rugidos y corrió hasta él. Con sus pequeños dientes cortó la red y liberó al rey de la selva. Moraleja: Los actos de bondad nunca se pierden, y el más pequeño puede ayudar al más grande.';
+        formData.append('referenceText', referenceText);
+
+        const res = await fetch(`/api/ai/analyze-reading`, { 
           method: 'POST', 
-          body: audioBlob 
+          body: formData 
         });
+
+        const result = await res.json();
+        console.log("AI Analysis Result:", result);
+        
+        if (result.analysis) {
+          alert(`¡Análisis IA completado!\nPuntaje de lectura: ${result.analysis.score}/100\n\nFeedback del Profe Robot:\n${result.analysis.feedback}`);
+        }
       } catch (e) {
-        console.error("Failed to upload audio", e);
+        console.error("Failed to analyze audio", e);
       }
     }
     goRetos();
