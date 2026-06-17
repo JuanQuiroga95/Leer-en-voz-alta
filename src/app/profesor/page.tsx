@@ -109,13 +109,20 @@ export default function ProfesorPanel() {
                     students.map(s => 
                       s.progress.map((p: any) => (
                         <div key={p.id} style={{ padding: '20px', background: 'white', borderRadius: '16px', boxShadow: '0 4px 15px rgba(0,0,0,0.03)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'flex-start' }}>
                             <div>
-                              <div style={{ fontWeight: 700, fontSize: '16px', color: '#2d3748' }}>{s.name}</div>
-                              <div style={{ fontSize: '14px', color: '#718096' }}>Leyó: "{p.text.title}"</div>
+                              <div style={{ fontWeight: 700, fontSize: '18px', color: '#2d3748' }}>{s.name}</div>
+                              <div style={{ fontSize: '14px', color: '#718096', marginTop: '4px' }}>Leyó: "{p.text.title}"</div>
                             </div>
-                            <div style={{ background: '#ebf4ff', color: '#3182ce', padding: '8px 16px', borderRadius: '12px', fontWeight: 700, fontSize: '18px' }}>
-                              Nota IA: {p.aiScore}/100
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                              <div style={{ background: '#ebf4ff', color: '#3182ce', padding: '8px 12px', borderRadius: '12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Fluidez (IA)</div>
+                                <div style={{ fontWeight: 800, fontSize: '20px' }}>{p.aiScore || 0}/100</div>
+                              </div>
+                              <div style={{ background: '#e6fffa', color: '#319795', padding: '8px 12px', borderRadius: '12px', textAlign: 'center' }}>
+                                <div style={{ fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>Comprensión</div>
+                                <div style={{ fontWeight: 800, fontSize: '20px' }}>{(p.score || 0) - (p.aiScore || 0)}/100</div>
+                              </div>
                             </div>
                           </div>
                           

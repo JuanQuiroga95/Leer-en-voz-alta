@@ -87,16 +87,26 @@ export default function AlumnoPanel() {
         const res = await fetch(`/api/ai/analyze-reading`, { method: 'POST', body: formData });
         const result = await res.json();
         
+        if (!res.ok) {
+          alert(`Error: ${result.error || 'No se pudo procesar el audio.'}`);
+          setAudioVisible(true);
+          return; // Detener flujo para no poner un cero
+        }
+
         if (result.analysis) {
           setAiAnalysis(result.analysis);
           if (result.audioUrl) setAiAudioUrl(result.audioUrl);
           alert(`¡Análisis completado!\nFluidez: ${result.analysis.score}/100\nFeedback: ${result.analysis.feedback}`);
+          goRetos();
+        } else {
+          alert("Error: El servidor no devolvió el análisis esperado.");
+          setAudioVisible(true);
         }
       } catch (e) {
         console.error("Error al analizar el audio", e);
+        alert("Hubo un error de conexión al enviar el audio. Intentá de nuevo.");
+        setAudioVisible(true);
       }
-    }
-    goRetos();
   };
 
   const formatTime = (seg: number) => `${Math.floor(seg / 60)}:${(seg % 60).toString().padStart(2, "0")}`;
