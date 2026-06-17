@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { File } from 'buffer';
+import { toFile } from 'openai/uploads';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -18,19 +18,21 @@ export async function POST(request: Request) {
 
     // Convert Blob to File object for OpenAI SDK
     const buffer = await audioFile.arrayBuffer();
-    const file = new globalThis.File([buffer], 'audio.webm', { type: audioFile.type || 'audio/webm' });
+    
+    // Convert Buffer to File for OpenAI SDK using their helper
+    const fileForOpenAI = await toFile(Buffer.from(buffer), 'audio.webm', { type: audioFile.type || 'audio/webm' });
 
     let transcriptText = '';
     try {
       const transcription = await openai.audio.transcriptions.create({
-        file,
+        file: fileForOpenAI,
         model: 'whisper-1',
         language: 'es',
       });
       transcriptText = transcription.text;
     } catch (e: any) {
       console.error("OpenAI Whisper Error:", e);
-      return NextResponse.json({ error: "No se pudo transcribir el audio. Verificá que la OPENAI_API_KEY esté correctamente configurada." }, { status: 500 });
+      return NextResponse.json({ error: `Error Whisper: ${e.message}` }, { status: 500 });
     }
 
     // 2. Analyze reading fluency and accuracy against referenceText
@@ -61,7 +63,7 @@ Compara ambos textos y devuelve un análisis en formato JSON estricto con la sig
       resultString = completion.choices[0]?.message?.content || '{}';
     } catch (e: any) {
       console.error("OpenAI GPT-4o Error:", e);
-      return NextResponse.json({ error: "No se pudo generar el análisis. Verificá que la OPENAI_API_KEY esté correctamente configurada." }, { status: 500 });
+      return NextResponse.json({ error: `Error GPT-4o: ${e.message}` }, { status: 500 });
     }
 
     let analysis;
