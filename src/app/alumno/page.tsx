@@ -121,7 +121,8 @@ export default function AlumnoPanel() {
   const finalizarRetos = async () => {
     // Calcular puntaje
     const correctCount = Object.values(retosRespuestas).filter(r => r === true).length;
-    const challengesScore = correctCount * 20; // 20 pts por reto correcto
+    const totalChallenges = activeText.challenges.length;
+    const challengesScore = totalChallenges > 0 ? Math.round((correctCount / totalChallenges) * 100) : 0;
     const aiScore = aiAnalysis?.score || 0;
     const total = challengesScore + aiScore;
     setScoreTotal(total);
