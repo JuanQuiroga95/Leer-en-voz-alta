@@ -2,19 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 
 export default function AdminPanel() {
   const router = useRouter();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
 
-  useEffect(() => {
+  // Estados del modal de edición
+  const [editUser, setEditUser] = useState<any>(null);
+  const [formData, setFormData] = useState({ name: '', legajo: '', division: '', role: 'ALUMNO', password: '' });
+
+  const fetchData = () => {
     fetch('/api/admin/users')
       .then(res => res.json())
       .then(data => {
         if (data.users) setUsers(data.users);
+      });
+      
+    fetch('/api/admin/stats')
+      .then(res => res.json())
+      .then(data => {
+        setStats(data);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchData();
   }, []);
 
   const totalUsers = users.length;
@@ -24,6 +40,30 @@ export default function AdminPanel() {
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
+  };
+
+  const handleEditClick = (u: any) => {
+    setEditUser(u);
+    setFormData({ name: u.name, legajo: u.legajo, division: u.division || '', role: u.role, password: '' });
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      const res = await fetch('/api/admin/users/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editUser.id, ...formData })
+      });
+      if (res.ok) {
+        alert("Usuario actualizado correctamente");
+        setEditUser(null);
+        fetchData();
+      } else {
+        alert("Error al actualizar");
+      }
+    } catch (e) {
+      alert("Error de conexión");
+    }
   };
 
   return (
@@ -57,11 +97,44 @@ export default function AdminPanel() {
           <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
             <div style={{ fontSize: '40px' }}>📊</div>
             <div>
-              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Usuarios Totales</div>
-              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{totalUsers}</div>
+              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Promedio Global</div>
+              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{stats?.avgPlatformScore || 0}/100</div>
             </div>
           </div>
         </div>
+
+        {stats && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+            <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '25px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>Lecturas Completadas por División</h3>
+              <div style={{ height: '250px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={stats.readingsByDivision}>
+                    <XAxis dataKey="name" stroke="#a0aec0" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#a0aec0" fontSize={12} tickLine={false} axisLine={false} />
+                    <RechartsTooltip cursor={{ fill: 'rgba(0,0,0,0.05)' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
+                    <Bar dataKey="completados" fill="#667eea" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '25px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }}>
+              <h3 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>Promedio Histórico de Notas</h3>
+              <div style={{ height: '250px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={stats.scoreHistory}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="date" stroke="#a0aec0" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis domain={[0, 100]} stroke="#a0aec0" fontSize={12} tickLine={false} axisLine={false} />
+                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
+                    <Line type="monotone" dataKey="promedio" stroke="#38a169" strokeWidth={3} dot={{ r: 4, fill: '#38a169', strokeWidth: 2, stroke: 'white' }} activeDot={{ r: 6 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          </div>
+        )}
 
         <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)', backdropFilter: 'blur(10px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -105,7 +178,7 @@ export default function AdminPanel() {
                         </span>
                       </td>
                       <td style={{ padding: '16px 20px', textAlign: 'center', borderRadius: '0 12px 12px 0' }}>
-                        <button style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '8px', color: '#4a5568', cursor: 'pointer', fontWeight: 500 }}>
+                        <button onClick={() => handleEditClick(u)} style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '8px', color: '#4a5568', cursor: 'pointer', fontWeight: 500 }}>
                           Editar
                         </button>
                       </td>
@@ -117,6 +190,51 @@ export default function AdminPanel() {
           )}
         </section>
       </div>
+
+      {editUser && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+            <h2 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>Editar Usuario</h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Nombre Completo</label>
+                <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+              </div>
+              
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Legajo</label>
+                  <input value={formData.legajo} onChange={e => setFormData({...formData, legajo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>División</label>
+                  <input value={formData.division} onChange={e => setFormData({...formData, division: e.target.value})} placeholder="Ej: 2° B" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Rol</label>
+                <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }}>
+                  <option value="ALUMNO">Alumno</option>
+                  <option value="PROFESOR">Profesor</option>
+                  <option value="ADMIN">Admin</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Nueva Contraseña (Opcional)</label>
+                <input type="password" placeholder="Dejar en blanco para no cambiar" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
+              <button onClick={() => setEditUser(null)} style={{ flex: 1, padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleSaveEdit} style={{ flex: 1, padding: '12px', background: '#3182ce', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Guardar Cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
