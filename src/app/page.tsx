@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useAudioRecorder } from "@/lib/useAudioRecorder";
 
 type Screen = "login" | "home" | "texto" | "retos" | "trofeo" | "stats";
 
@@ -11,6 +12,8 @@ export default function Page() {
   const [audioVisible, setAudioVisible] = useState(false);
   const grabTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const { isRecording, audioBlob, audioUrl, startRecording, stopRecording, resetRecording: resetAudio } = useAudioRecorder();
+  
   const currentScreen = screenHistory[screenHistory.length - 1];
 
   const navigate = (id: Screen) => {
@@ -30,6 +33,7 @@ export default function Page() {
   const goStats = () => navigate("stats");
 
   const iniciarGrabacion = () => {
+    startRecording();
     setGrabando(true);
     setGrabSeg(0);
     grabTimerRef.current = setInterval(() => {
@@ -38,6 +42,7 @@ export default function Page() {
   };
 
   const detenerGrabacion = () => {
+    stopRecording();
     setGrabando(false);
     if (grabTimerRef.current) clearInterval(grabTimerRef.current);
     setAudioVisible(true);
@@ -49,10 +54,29 @@ export default function Page() {
   };
 
   const resetGrabacion = () => {
+    resetAudio();
     setGrabando(false);
     if (grabTimerRef.current) clearInterval(grabTimerRef.current);
     setGrabSeg(0);
     setAudioVisible(false);
+  };
+
+  const handleEnviarRetos = async () => {
+    if (audioBlob) {
+      try {
+        const formData = new FormData();
+        formData.append('file', audioBlob, `audio_${Date.now()}.webm`);
+        // We will pass the audio blob as body for Vercel Blob directly or through FormData
+        // Wait, Vercel Blob route expects the raw body if we use `request.body`.
+        await fetch(`/api/upload?filename=audio_${Date.now()}.webm`, { 
+          method: 'POST', 
+          body: audioBlob 
+        });
+      } catch (e) {
+        console.error("Failed to upload audio", e);
+      }
+    }
+    goRetos();
   };
 
   const formatTime = (seg: number) => {
@@ -238,9 +262,15 @@ export default function Page() {
 
               {audioVisible && (
                 <div className="audio-player visible">
-                  <button className="play-btn">▶</button>
-                  <div className="audio-barra"><div className="audio-fill" style={{ width: "0%" }}></div></div>
-                  <span className="audio-tiempo">{formatTime(grabSeg)}</span>
+                  {audioUrl ? (
+                    <audio src={audioUrl} controls style={{ width: '100%', height: '36px' }} />
+                  ) : (
+                    <>
+                      <button className="play-btn">▶</button>
+                      <div className="audio-barra"><div className="audio-fill" style={{ width: "0%" }}></div></div>
+                      <span className="audio-tiempo">{formatTime(grabSeg)}</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -249,7 +279,7 @@ export default function Page() {
                   <button className="btn-regrabar" onClick={resetGrabacion}>
                     ↺ Grabar de nuevo
                   </button>
-                  <button className="btn-enviar" onClick={goRetos}>
+                  <button className="btn-enviar" onClick={handleEnviarRetos}>
                     Continuar a los retos →
                   </button>
                 </>
