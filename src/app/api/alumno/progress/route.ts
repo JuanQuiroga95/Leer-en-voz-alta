@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { textId, aiScore, aiAnalysis, challengesScore } = await request.json();
+    const { textId, aiScore, aiAnalysis, challengesScore, audioUrl } = await request.json();
     const finalScore = aiScore + challengesScore; // Por ejemplo, suma de IA y Retos
 
     const progress = await prisma.readingProgress.create({
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
         score: finalScore,
         aiScore: aiScore,
         aiAnalysis: aiAnalysis,
+        audioUrl: audioUrl,
       }
     });
 

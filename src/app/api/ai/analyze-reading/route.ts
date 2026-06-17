@@ -61,9 +61,15 @@ Compara ambos textos y devuelve un análisis en formato JSON estricto con la sig
       analysis = { score: 0, feedback: "Error procesando el análisis." };
     }
 
+    // 3. Upload to Vercel Blob
+    const { put } = await import('@vercel/blob');
+    const blobName = `audio_${Date.now()}.webm`;
+    const blobResult = await put(blobName, buffer, { access: 'public', contentType: 'audio/webm' });
+
     return NextResponse.json({
       transcription: transcriptText,
-      analysis
+      analysis,
+      audioUrl: blobResult.url
     });
 
   } catch (error: any) {

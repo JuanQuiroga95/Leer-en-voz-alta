@@ -8,19 +8,37 @@ export default function ProfesorPanel() {
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchDashboard = () => {
     fetch('/api/profesor/dashboard')
       .then(res => res.json())
       .then(data => {
         if (data.students) setStudents(data.students);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchDashboard();
   }, []);
 
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   };
+
+  const resetProgress = async (progressId: string) => {
+    if (confirm("¿Estás seguro que querés borrar este registro? El alumno tendrá que leer el texto de nuevo.")) {
+      await fetch('/api/profesor/reset-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progressId })
+      });
+      fetchDashboard();
+    }
+  };
+
+  const allProgress = students.flatMap(s => s.progress);
+  const avgScore = allProgress.length > 0 ? Math.round(allProgress.reduce((sum, p) => sum + (p.aiScore || 0), 0) / allProgress.length) : 0;
 
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)', padding: '40px 20px', fontFamily: '"Inter", sans-serif' }}>
@@ -34,6 +52,23 @@ export default function ProfesorPanel() {
             Cerrar Sesión
           </button>
         </header>
+
+        <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ fontSize: '40px' }}>📈</div>
+            <div>
+              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Promedio División (Fluidez)</div>
+              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{avgScore}/100</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ fontSize: '40px' }}>📚</div>
+            <div>
+              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Lecturas Completadas</div>
+              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{allProgress.length}</div>
+            </div>
+          </div>
+        </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
           
@@ -101,13 +136,17 @@ export default function ProfesorPanel() {
                             )}
                           </div>
 
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <button style={{ flex: 1, padding: '10px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
-                              ▶ Escuchar Audio Original
-                            </button>
-                            <button style={{ flex: 1, padding: '10px', background: '#38a169', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
-                              Confirmar Nota
-                            </button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                            {p.audioUrl ? (
+                              <audio src={p.audioUrl} controls style={{ width: '100%', height: '40px', borderRadius: '8px' }} />
+                            ) : (
+                              <div style={{ padding: '10px', background: '#fed7d7', color: '#c53030', borderRadius: '8px', fontSize: '14px' }}>Audio no disponible.</div>
+                            )}
+                            <div style={{ display: 'flex', gap: '10px' }}>
+                              <button onClick={() => resetProgress(p.id)} style={{ flex: 1, padding: '10px', background: '#ff4b4b', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600 }}>
+                                ↻ Reiniciar Ejercicio
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))

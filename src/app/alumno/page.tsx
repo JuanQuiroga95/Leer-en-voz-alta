@@ -16,6 +16,7 @@ export default function AlumnoPanel() {
   const [texts, setTexts] = useState<any[]>([]);
   const [activeText, setActiveText] = useState<any>(null);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiAudioUrl, setAiAudioUrl] = useState<string | null>(null);
   const [scoreTotal, setScoreTotal] = useState(0);
 
   const { isRecording, audioBlob, audioUrl, startRecording, stopRecording, resetRecording: resetAudio } = useAudioRecorder();
@@ -88,6 +89,7 @@ export default function AlumnoPanel() {
         
         if (result.analysis) {
           setAiAnalysis(result.analysis);
+          if (result.audioUrl) setAiAudioUrl(result.audioUrl);
           alert(`¡Análisis completado!\nFluidez: ${result.analysis.score}/100\nFeedback: ${result.analysis.feedback}`);
         }
       } catch (e) {
@@ -120,7 +122,8 @@ export default function AlumnoPanel() {
         textId: activeText.id,
         aiScore,
         aiAnalysis,
-        challengesScore
+        challengesScore,
+        audioUrl: aiAudioUrl
       })
     });
 

@@ -17,6 +17,10 @@ export default function AdminPanel() {
       });
   }, []);
 
+  const totalUsers = users.length;
+  const totalStudents = users.filter(u => u.role === 'ALUMNO').length;
+  const totalTeachers = users.filter(u => u.role === 'PROFESOR').length;
+
   const handleLogout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
@@ -35,10 +39,34 @@ export default function AdminPanel() {
           </button>
         </header>
 
+        <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ fontSize: '40px' }}>👥</div>
+            <div>
+              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Total Alumnos</div>
+              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{totalStudents}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ fontSize: '40px' }}>👨‍🏫</div>
+            <div>
+              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Total Profesores</div>
+              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{totalTeachers}</div>
+            </div>
+          </div>
+          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <div style={{ fontSize: '40px' }}>📊</div>
+            <div>
+              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Usuarios Totales</div>
+              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{totalUsers}</div>
+            </div>
+          </div>
+        </div>
+
         <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)', backdropFilter: 'blur(10px)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h2 style={{ margin: 0, color: '#2d3748', fontSize: '22px' }}>Gestión de Usuarios</h2>
-            <button style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(118, 75, 162, 0.3)' }}>
+            <button onClick={() => alert("Para crear usuarios rápidamente podés usar el script de Seed o crear un formulario acá pronto.")} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(118, 75, 162, 0.3)' }}>
               + Crear Usuario
             </button>
           </div>
