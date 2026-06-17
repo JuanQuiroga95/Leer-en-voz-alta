@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     let resultString = '';
     try {
       const completion = await groq.chat.completions.create({
-        model: 'llama3-8b-8192', // Modelo Llama 3 en Groq
+        model: 'llama-3.1-8b-instant', // Modelo Llama 3.1 actualizado en Groq
         response_format: { type: 'json_object' },
         messages: [
           {
