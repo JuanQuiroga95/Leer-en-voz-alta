@@ -107,6 +107,7 @@ export default function AlumnoPanel() {
         alert("Hubo un error de conexión al enviar el audio. Intentá de nuevo.");
         setAudioVisible(true);
       }
+    }
   };
 
   const formatTime = (seg: number) => `${Math.floor(seg / 60)}:${(seg % 60).toString().padStart(2, "0")}`;
