@@ -163,16 +163,34 @@ export function calculatePPM(wordsRead: number, errors: number, timeSeconds: num
 }
 
 /**
- * Determina el nivel de desempeño según las tablas del Censo de Mendoza para 1° año secundaria.
+ * Determina el nivel de desempeño según las tablas del Censo de Mendoza, ajustado por año escolar.
+ * Umbrales propuestos (Secundaria):
+ * - 1° y 2°: Crítico < 110, Medio 110-135, Avanzado > 135
+ * - 3°: Crítico < 125, Medio 125-155, Avanzado > 155
+ * - 4° y 5°: Crítico < 140, Medio 140-175, Avanzado > 175
  */
-export function getPerformanceLevel(ppm: number): { level: string; color: string; description: string } {
-  if (ppm < 100) {
+export function getPerformanceLevel(ppm: number, year: number = 1): { level: string; color: string; description: string } {
+  let criticoThreshold = 100;
+  let medioThreshold = 181;
+
+  if (year <= 2) {
+    criticoThreshold = 110;
+    medioThreshold = 135;
+  } else if (year === 3) {
+    criticoThreshold = 125;
+    medioThreshold = 155;
+  } else {
+    criticoThreshold = 140;
+    medioThreshold = 175;
+  }
+
+  if (ppm < criticoThreshold) {
     return {
       level: 'Crítico',
       color: '#c0392b',
-      description: 'Carece de la automatización elemental requerida para textos de nivel secundario.'
+      description: `Carece de la automatización elemental requerida para textos de nivel ${year}° año.`
     };
-  } else if (ppm <= 181) {
+  } else if (ppm <= medioThreshold) {
     return {
       level: 'Medio',
       color: '#e8a020',

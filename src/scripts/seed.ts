@@ -2,6 +2,10 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 
 const connectionString = `${process.env.DATABASE_URL}`;
 const pool = new Pool({ connectionString });
@@ -34,7 +38,7 @@ async function main() {
       password,
       name: 'Profe Demo',
       role: 'PROFESOR',
-      division: '2° B',
+      division: '2° 1ra',
     },
   });
 
@@ -44,7 +48,7 @@ async function main() {
       password,
       name: 'Alumno Demo',
       role: 'ALUMNO',
-      division: '2° B',
+      division: '2° 1ra',
     },
   });
 

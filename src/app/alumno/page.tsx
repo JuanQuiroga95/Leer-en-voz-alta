@@ -22,6 +22,7 @@ export default function AlumnoPanel() {
   const [activeTab, setActiveTab] = useState<"EVALUACION" | "PRACTICA">("EVALUACION");
   const [textsEvaluacion, setTextsEvaluacion] = useState<any[]>([]);
   const [textsPractica, setTextsPractica] = useState<any[]>([]);
+  const [alumnoDetails, setAlumnoDetails] = useState<any>(null);
 
   const [activeText, setActiveText] = useState<any>(null);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
@@ -51,6 +52,7 @@ export default function AlumnoPanel() {
       .then(data => {
         if (data.evaluacion) setTextsEvaluacion(data.evaluacion);
         if (data.practica) setTextsPractica(data.practica);
+        if (data.alumno) setAlumnoDetails(data.alumno);
       });
   };
 
@@ -105,6 +107,14 @@ export default function AlumnoPanel() {
       }
       formData.append('textId', activeText.id);
       formData.append('content', activeText.content);
+
+      // Extract year from division (e.g. "3° 2da" -> 3), default 1
+      let year = 1;
+      if (alumnoDetails?.division) {
+        const match = alumnoDetails.division.match(/^(\d+)°/);
+        if (match) year = parseInt(match[1], 10);
+      }
+      formData.append('year', year.toString());
       
       const response = await fetch('/api/ai/analyze-reading', {
         method: 'POST',
@@ -284,9 +294,16 @@ export default function AlumnoPanel() {
   const timerColorClass = questionTimer > 15 ? 'safe' : questionTimer > 7 ? 'warning' : 'danger';
 
   // Census metrics helpers
+  let alumnoYear = 1;
+  if (alumnoDetails?.division) {
+    const match = alumnoDetails.division.match(/^(\d+)°/);
+    if (match) alumnoYear = parseInt(match[1], 10);
+  }
+
   const ppm = aiAnalysis?.ppm || 0;
   const prosody = aiAnalysis?.prosody || 1;
-  const performanceLevel = aiAnalysis?.performanceLevel || (ppm < 100 ? 'Crítico' : ppm <= 181 ? 'Medio' : 'Avanzado');
+  const perfData = aiAnalysis?.performanceLevel ? { level: aiAnalysis.performanceLevel } : getPerformanceLevel(ppm, alumnoYear);
+  const performanceLevel = perfData.level;
   const correctAnswers = Object.values(retosRespuestas).filter(r => r.correct).length;
   const totalQuestions = retosPendientes.length;
   const comprehensionLevel = getComprehensionLevel(correctAnswers, totalQuestions);
@@ -309,7 +326,7 @@ export default function AlumnoPanel() {
         <div className={`screen ${currentScreen === "home" ? "active" : ""}`} id="s-home">
           <div className="home-header">
             <div className="home-saludo">¡Bienvenido! 👋</div>
-            <div className="home-nombre">Estudiante Demo</div>
+            <div className="home-nombre">{alumnoDetails?.name || "Estudiante"}</div>
             <div className="home-stats">
               <div className="stat-pill"><span className="num">{trofeosGanados}</span><span className="lbl">Textos leídos</span></div>
               <div className="stat-pill"><span className="num">{trofeosGanados}</span><span className="lbl">Trofeos</span></div>

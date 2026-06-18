@@ -60,7 +60,7 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json({ evaluacion, practica });
+    return NextResponse.json({ evaluacion, practica, alumno });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Error fetching texts' }, { status: 500 });

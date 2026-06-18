@@ -16,6 +16,8 @@ export async function POST(request: Request) {
     const audioFile = formData.get('audio') as Blob | null;
     const referenceText = formData.get('referenceText') as string | null;
     const readingTimeSeconds = formData.get('readingTimeSeconds') as string | null;
+    const yearStr = formData.get('year') as string | null;
+    const year = yearStr ? parseInt(yearStr, 10) : 1;
 
     if (!audioFile || !referenceText) {
       return NextResponse.json({ error: 'Faltan datos (audio o referenceText)' }, { status: 400 });
@@ -69,7 +71,7 @@ Compara ambos textos y devuelve un análisis en formato JSON estricto con la sig
   "score": (entero del 0 al 100 evaluando precisión y completitud general),
   "ppm": (entero: Palabras Por Minuto correctas. Calcula: (palabras correctamente leídas × 60) / tiempo_en_segundos),
   "prosody": (entero 1-3, donde 3=Alto: lectura expresiva que respeta entonación y puntuación, 2=Medio: respeto intermitente por puntuación, 1=Bajo: lectura monótona o muy entrecortada),
-  "performanceLevel": (string: "Crítico" si PPM<100, "Medio" si PPM entre 100-181, "Avanzado" si PPM>181),
+  "performanceLevel": (string: "Crítico", "Medio" o "Avanzado" dependiendo del año del alumno, para ${year}° año calcula: si es 1-2(Critico<110, Avanzado>135), si es 3(Critico<125, Avanzado>155), si es 4-5(Critico<140, Avanzado>175)),
   "wordsReadCorrectly": (entero: cantidad de palabras que leyó correctamente),
   "totalErrors": (entero: cantidad total de errores de lectura),
   "omittedWords": [arreglo de palabras del texto original que el alumno se salteó],
@@ -113,8 +115,23 @@ REGLAS DE EVALUACIÓN (basadas en el Censo de Fluidez de Mendoza):
       }
       if (typeof analysis.prosody !== 'number') analysis.prosody = 1;
       if (!analysis.performanceLevel) {
-        if (analysis.ppm < 100) analysis.performanceLevel = 'Crítico';
-        else if (analysis.ppm <= 181) analysis.performanceLevel = 'Medio';
+        // Fallback robusto importando la función (si fuera posible) o replicando la lógica
+        let criticoThreshold = 100;
+        let medioThreshold = 181;
+
+        if (year <= 2) {
+          criticoThreshold = 110;
+          medioThreshold = 135;
+        } else if (year === 3) {
+          criticoThreshold = 125;
+          medioThreshold = 155;
+        } else {
+          criticoThreshold = 140;
+          medioThreshold = 175;
+        }
+
+        if (analysis.ppm < criticoThreshold) analysis.performanceLevel = 'Crítico';
+        else if (analysis.ppm <= medioThreshold) analysis.performanceLevel = 'Medio';
         else analysis.performanceLevel = 'Avanzado';
       }
       if (!Array.isArray(analysis.omittedWords)) analysis.omittedWords = [];
