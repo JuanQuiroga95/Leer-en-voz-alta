@@ -125,7 +125,8 @@ export default function AlumnoPanel() {
         formData.append('audio', audioBlob, 'lectura.webm');
       }
       formData.append('textId', activeText.id);
-      formData.append('content', activeText.content);
+      formData.append('referenceText', activeText.content);
+      formData.append('readingTimeSeconds', grabSeg.toString());
 
       // Extract year from division (e.g. "3° 2da" -> 3), default 1
       let year = 1;
