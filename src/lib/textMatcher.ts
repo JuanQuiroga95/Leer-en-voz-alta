@@ -98,7 +98,7 @@ export function matchWords(
   }
 
   let refPointer = 0;
-  const WINDOW = 3; // Ventana de búsqueda para tolerar omisiones
+  const WINDOW = 2; // Reducido a 2 para evitar saltos agresivos
 
   for (let s = 0; s < spokenWords.length; s++) {
     const spoken = spokenWords[s];
@@ -106,16 +106,26 @@ export function matchWords(
     let bestSim = 0;
 
     // Buscar en una ventana alrededor del pointer actual
-    const searchStart = Math.max(0, refPointer - 1);
+    const searchStart = Math.max(0, refPointer - 1); // Permitir buscar 1 atrás por si repitió
     const searchEnd = Math.min(referenceWords.length - 1, refPointer + WINDOW);
 
     for (let r = searchStart; r <= searchEnd; r++) {
-      // Solo considerar palabras que aún no fueron marcadas como correct
       if (results[r].status === 'correct') continue;
       
       const sim = similarity(referenceWords[r], spoken);
-      if (sim > bestSim) {
-        bestSim = sim;
+      // Penalizar saltos grandes para palabras cortas (ej: "el", "la", "de")
+      const isShortWord = normalizeWord(referenceWords[r]).length <= 3;
+      const isJump = r > refPointer;
+      
+      let effectiveSim = sim;
+      if (isJump && isShortWord && sim < 1) {
+        effectiveSim -= 0.3; // Mucha penalización si es corta y no es exacta
+      } else if (isJump && isShortWord && sim === 1) {
+        effectiveSim -= 0.1; // Leve penalización para evitar saltar a un "de" lejano
+      }
+
+      if (effectiveSim > bestSim) {
+        bestSim = effectiveSim;
         bestMatch = r;
       }
     }
@@ -128,18 +138,23 @@ export function matchWords(
         results[bestMatch].status = 'close';
         results[bestMatch].spokenAs = spoken;
       } else {
-        results[bestMatch].status = 'wrong';
-        results[bestMatch].spokenAs = spoken;
+        // Ignorar si la similitud es muy baja (ruido o error)
+        continue;
       }
 
       // Marcar las palabras omitidas entre el pointer y el match
-      for (let skip = refPointer; skip < bestMatch; skip++) {
-        if (results[skip].status === 'pending') {
-          results[skip].status = 'wrong';
+      // Pero SOLO si avanzamos (bestMatch >= refPointer)
+      if (bestMatch >= refPointer) {
+        for (let skip = refPointer; skip < bestMatch; skip++) {
+          if (results[skip].status === 'pending') {
+            results[skip].status = 'wrong';
+          }
         }
+        refPointer = bestMatch + 1;
+      } else if (bestMatch === searchStart) {
+        // Se corrigió a sí mismo repitiendo una palabra anterior, no avanzamos el pointer
+        refPointer = Math.max(refPointer, bestMatch + 1);
       }
-
-      refPointer = bestMatch + 1;
     }
   }
 

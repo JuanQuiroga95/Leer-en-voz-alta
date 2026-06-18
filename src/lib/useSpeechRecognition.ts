@@ -111,28 +111,34 @@ export function useSpeechRecognition() {
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.warn('Speech recognition error:', event.error);
       if (event.error === 'no-speech') {
-        // No pasa nada, se reinicia solo
+        // No pasa nada, se reinicia solo en onend
         return;
       }
       if (event.error === 'aborted') {
         return;
       }
-      // En otros errores, intentar reiniciar
+      // En otros errores, intentar reiniciar con un delay si sigue activo
       if (shouldRestartRef.current) {
         setTimeout(() => {
-          try { recognition.start(); } catch { /* ignore */ }
-        }, 200);
+          if (shouldRestartRef.current && recognitionRef.current) {
+            try { recognition.start(); } catch { /* ignore */ }
+          }
+        }, 500);
       }
     };
 
     recognition.onend = () => {
-      // El reconocimiento se detiene periódicamente, reiniciar si debemos seguir
+      // El reconocimiento se detiene periódicamente (silencio o límite). Reiniciamos si debe seguir grabando.
       if (shouldRestartRef.current) {
-        try {
-          recognition.start();
-        } catch {
-          setIsListening(false);
-        }
+        setTimeout(() => {
+          if (shouldRestartRef.current && recognitionRef.current) {
+            try {
+              recognition.start();
+            } catch (err) {
+              console.warn("Failed to restart speech recognition", err);
+            }
+          }
+        }, 300); // Pequeño delay de 300ms ayuda a evitar errores de colisión en Chrome
       } else {
         setIsListening(false);
       }
