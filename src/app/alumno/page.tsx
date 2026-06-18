@@ -525,34 +525,32 @@ export default function AlumnoPanel() {
                 </div>
 
                 {currentReto ? (
-                  <div className="reto-card current">
-                    <div className="reto-q-num">Pregunta {currentQuestionIdx + 1} de {totalQuestions}</div>
-                    <div className="reto-q">{currentReto.question}</div>
+                  <div className="reto-card-single current">
+                    <div className="rc-num">Pregunta {currentQuestionIdx + 1} de {totalQuestions}</div>
+                    <div className="rc-pregunta">{currentReto.question}</div>
                     
                     {questionAnswered && retosRespuestas[currentReto.id]?.timedOut && (
-                      <div className="timeout-msg">⏰ ¡Se acabó el tiempo!</div>
+                      <div className="timeout-msg" style={{color: '#c0392b', fontSize: 13, fontWeight: 'bold', marginBottom: 12, textAlign: 'center'}}>⏰ ¡Se acabó el tiempo!</div>
                     )}
 
-                    <div className="reto-options" style={{ pointerEvents: questionAnswered ? 'none' : 'auto', opacity: questionAnswered ? 0.7 : 1 }}>
+                    <div className="opciones" style={{ pointerEvents: questionAnswered ? 'none' : 'auto', opacity: questionAnswered ? 0.8 : 1 }}>
                       {JSON.parse(currentReto.options).map((opt: string, i: number) => {
                         const isSelected = retosRespuestas[currentReto.id] !== undefined;
                         const isCorrectOption = i === currentReto.correctIdx;
-                        // Muestra el color de la respuesta seleccionada solo cuando el usuario respondió
-                        let optClass = "reto-opt";
+                        let optClass = "opcion";
                         if (isSelected) {
-                          if (isCorrectOption) optClass += " correct";
+                          if (isCorrectOption) optClass += " correcta";
                           else if (!retosRespuestas[currentReto.id].correct && i !== currentReto.correctIdx) {
-                            // If this was the wrong answer picked (though we don't strictly track WHICH wrong answer was picked in state)
-                            // We will just highlight correct green, and if we timed out, no red.
-                            // If they clicked a wrong one, we just color the selected one red (but we don't have selectedIdx saved)
-                            // For simplicity, we just show the correct one in green.
+                            // En esta vista rápida simplificada mostramos la correcta en verde.
                           }
                         }
                         
                         return (
-                          <button key={i} className={optClass} onClick={() => selectRetoOption(currentReto.id, i === currentReto.correctIdx)}>
-                            <div className="opt-marker">{["A","B","C","D"][i] || "-"}</div>
-                            <div className="opt-text">{opt}</div>
+                          <button key={i} className={optClass} onClick={() => selectRetoOption(currentReto.id, i === currentReto.correctIdx)} style={{ display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left', background: optClass.includes('correcta') ? undefined : '#fff' }}>
+                            <div className="opt-marker" style={{ background: 'rgba(45,106,159,0.1)', color: '#2d6a9f', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 12, flexShrink: 0 }}>
+                              {["A","B","C","D"][i] || "-"}
+                            </div>
+                            <div className="opt-text" style={{ flex: 1 }}>{opt}</div>
                           </button>
                         );
                       })}
