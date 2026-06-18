@@ -10,9 +10,11 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
 
-  // Estados del modal de edición
+  // Estados del modal de edición/creación
   const [editUser, setEditUser] = useState<any>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({ name: '', legajo: '', division: '', role: 'ALUMNO', password: '' });
+  const [uploadingCSV, setUploadingCSV] = useState(false);
 
   const fetchData = () => {
     fetch('/api/admin/users')
@@ -44,26 +46,115 @@ export default function AdminPanel() {
 
   const handleEditClick = (u: any) => {
     setEditUser(u);
+    setIsCreating(false);
     setFormData({ name: u.name, legajo: u.legajo, division: u.division || '', role: u.role, password: '' });
+  };
+
+  const handleCreateClick = () => {
+    setIsCreating(true);
+    setFormData({ name: '', legajo: '', division: '', role: 'ALUMNO', password: '' });
+  };
+
+  const handleDeleteClick = async (id: string) => {
+    if (confirm('¿Estás seguro de que querés borrar este usuario? Esta acción no se puede deshacer.')) {
+      const res = await fetch(`/api/admin/users?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchData();
+      } else {
+        alert('Error al borrar');
+      }
+    }
   };
 
   const handleSaveEdit = async () => {
     try {
-      const res = await fetch('/api/admin/users/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: editUser.id, ...formData })
-      });
-      if (res.ok) {
-        alert("Usuario actualizado correctamente");
-        setEditUser(null);
-        fetchData();
+      if (isCreating) {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        if (res.ok) {
+          alert("Usuario creado correctamente. La contraseña por defecto es 123456.");
+          setIsCreating(false);
+          fetchData();
+        } else alert("Error al crear");
       } else {
-        alert("Error al actualizar");
+        const res = await fetch('/api/admin/users/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editUser.id, ...formData })
+        });
+        if (res.ok) {
+          alert("Usuario actualizado correctamente");
+          setEditUser(null);
+          fetchData();
+        } else alert("Error al actualizar");
       }
     } catch (e) {
       alert("Error de conexión");
     }
+  };
+
+  const handleDownloadTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8,nombre,division,rol\nJuan Quiroga,2° 1ra,ALUMNO\nMaria Perez,3° 2da,ALUMNO\nCarlos Docente,,PROFESOR";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "plantilla_usuarios.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingCSV(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target?.result as string;
+      const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
+      
+      const usersToCreate = [];
+      // skip header if present
+      const startIdx = lines[0].toLowerCase().includes('nombre') ? 1 : 0;
+      
+      for (let i = startIdx; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        if (cols.length >= 1 && cols[0]) {
+          usersToCreate.push({
+            name: cols[0],
+            division: cols[1] || '',
+            role: cols[2] ? cols[2].toUpperCase() : 'ALUMNO'
+          });
+        }
+      }
+
+      if (usersToCreate.length > 0) {
+        try {
+          const res = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ users: usersToCreate })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            alert(`Se crearon ${data.count} usuarios correctamente con contraseña por defecto '123456'. Los legajos se generaron automáticamente.`);
+            fetchData();
+          } else {
+            alert('Error al importar CSV');
+          }
+        } catch (err) {
+          alert('Error de conexión');
+        }
+      }
+      setUploadingCSV(false);
+      // clear input
+      e.target.value = '';
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -137,11 +228,20 @@ export default function AdminPanel() {
         )}
 
         <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
             <h2 style={{ margin: 0, color: '#2d3748', fontSize: '22px' }}>Gestión de Usuarios</h2>
-            <button onClick={() => alert("Para crear usuarios rápidamente podés usar el script de Seed o crear un formulario acá pronto.")} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(118, 75, 162, 0.3)' }}>
-              + Crear Usuario
-            </button>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button onClick={handleDownloadTemplate} style={{ padding: '10px 16px', background: '#edf2f7', color: '#4a5568', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                Descargar Plantilla CSV
+              </button>
+              <label style={{ padding: '10px 16px', background: '#e2e8f0', color: '#2d3748', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, display: 'inline-block' }}>
+                {uploadingCSV ? 'Subiendo...' : '📤 Subir CSV'}
+                <input type="file" accept=".csv" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploadingCSV} />
+              </label>
+              <button onClick={handleCreateClick} style={{ padding: '10px 24px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(118, 75, 162, 0.3)' }}>
+                + Crear Usuario
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -178,8 +278,11 @@ export default function AdminPanel() {
                         </span>
                       </td>
                       <td style={{ padding: '16px 20px', textAlign: 'center', borderRadius: '0 12px 12px 0' }}>
-                        <button onClick={() => handleEditClick(u)} style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '8px', color: '#4a5568', cursor: 'pointer', fontWeight: 500 }}>
+                        <button onClick={() => handleEditClick(u)} style={{ background: 'transparent', border: '1px solid #e2e8f0', padding: '6px 16px', borderRadius: '8px', color: '#4a5568', cursor: 'pointer', fontWeight: 500, marginRight: '8px' }}>
                           Editar
+                        </button>
+                        <button onClick={() => handleDeleteClick(u.id)} style={{ background: '#fed7d7', border: 'none', padding: '6px 16px', borderRadius: '8px', color: '#c53030', cursor: 'pointer', fontWeight: 500 }}>
+                          Borrar
                         </button>
                       </td>
                     </tr>
@@ -191,10 +294,10 @@ export default function AdminPanel() {
         </section>
       </div>
 
-      {editUser && (
+      {(editUser || isCreating) && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
           <div style={{ background: 'white', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
-            <h2 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>Editar Usuario</h2>
+            <h2 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>{isCreating ? 'Nuevo Usuario' : 'Editar Usuario'}</h2>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
               <div>
@@ -204,8 +307,8 @@ export default function AdminPanel() {
               
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Legajo</label>
-                  <input value={formData.legajo} onChange={e => setFormData({...formData, legajo: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Legajo {isCreating && '(Auto)'}</label>
+                  <input value={formData.legajo} onChange={e => setFormData({...formData, legajo: e.target.value})} placeholder={isCreating ? 'Se genera solo si está vacío' : ''} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>División</label>
@@ -240,14 +343,16 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Nueva Contraseña (Opcional)</label>
-                <input type="password" placeholder="Dejar en blanco para no cambiar" value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+                <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>
+                  {isCreating ? 'Contraseña (Opcional)' : 'Nueva Contraseña (Opcional)'}
+                </label>
+                <input type="password" placeholder={isCreating ? "Por defecto: 123456" : "Dejar en blanco para no cambiar"} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '25px' }}>
-              <button onClick={() => setEditUser(null)} style={{ flex: 1, padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-              <button onClick={handleSaveEdit} style={{ flex: 1, padding: '12px', background: '#3182ce', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Guardar Cambios</button>
+              <button onClick={() => { setEditUser(null); setIsCreating(false); }} style={{ flex: 1, padding: '12px', background: '#edf2f7', color: '#4a5568', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleSaveEdit} style={{ flex: 1, padding: '12px', background: '#3182ce', color: 'white', border: 'none', borderRadius: '10px', fontWeight: 600, cursor: 'pointer' }}>{isCreating ? 'Crear' : 'Guardar'}</button>
             </div>
           </div>
         </div>

@@ -100,7 +100,28 @@ export default function ProfesorPanel() {
       });
   };
 
-  useEffect(() => { fetchDashboard(); }, []);
+  useEffect(() => {
+    fetchDashboard();
+  }, []);
+
+  const handleChangePassword = async () => {
+    const newPass = prompt('Ingresá tu nueva contraseña (mínimo 4 caracteres):');
+    if (newPass && newPass.trim().length >= 4) {
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword: newPass.trim() })
+        });
+        if (res.ok) alert('Contraseña cambiada exitosamente.');
+        else alert('Error al cambiar contraseña.');
+      } catch (e) {
+        alert('Error de red.');
+      }
+    } else if (newPass !== null) {
+      alert('Contraseña inválida. Debe tener al menos 4 caracteres.');
+    }
+  };
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -207,7 +228,12 @@ export default function ProfesorPanel() {
             <h1 style={S.headerTitle}>📊 Panel Docente</h1>
             <p style={S.headerSub}>{profesor?.name || "Profesor"} · Universo Videla</p>
           </div>
-          <button onClick={handleLogout} style={S.logoutBtn}>Cerrar Sesión</button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={handleChangePassword} style={{ padding: "8px 18px", background: "rgba(59, 130, 246, 0.15)", color: "#93c5fd", border: "1px solid rgba(59, 130, 246, 0.3)", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>
+              🔑 Cambiar Contraseña
+            </button>
+            <button onClick={handleLogout} style={S.logoutBtn}>Cerrar Sesión</button>
+          </div>
         </header>
 
         {/* Tab Bar */}

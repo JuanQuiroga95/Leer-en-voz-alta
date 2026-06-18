@@ -46,6 +46,25 @@ export default function AlumnoPanel() {
   
   const currentScreen = screenHistory[screenHistory.length - 1];
 
+  const handleChangePassword = async () => {
+    const newPass = prompt('Ingresá tu nueva contraseña (mínimo 4 caracteres):');
+    if (newPass && newPass.trim().length >= 4) {
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newPassword: newPass.trim() })
+        });
+        if (res.ok) alert('Contraseña cambiada exitosamente.');
+        else alert('Error al cambiar contraseña.');
+      } catch (e) {
+        alert('Error de red.');
+      }
+    } else if (newPass !== null) {
+      alert('Contraseña inválida. Debe tener al menos 4 caracteres.');
+    }
+  };
+
   const fetchTexts = () => {
     fetch('/api/alumno/texts')
       .then(res => res.json())
@@ -319,7 +338,10 @@ export default function AlumnoPanel() {
         <div className="topbar">
           <button className="back-btn" onClick={goBack} style={{ display: screenHistory.length > 1 ? "flex" : "none" }}>←</button>
           <div className="logo-text">📖 Leer en <span>Voz Alta</span></div>
-          <div className="avatar" onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/login'); }} title="Cerrar sesión">🚪</div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <div className="avatar" onClick={handleChangePassword} title="Cambiar Contraseña">🔑</div>
+            <div className="avatar" onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/login'); }} title="Cerrar sesión">🚪</div>
+          </div>
         </div>
 
         {/* HOME */}
