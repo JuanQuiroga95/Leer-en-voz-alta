@@ -204,13 +204,14 @@ export default function AlumnoPanel() {
 
   const responder = (retoId: string, correct: boolean) => {
     if (retosRespuestas[retoId]) return; // Already answered
-    setRetosRespuestas((prev) => ({ ...prev, [retoId]: { correct, timedOut: false } }));
+    const updatedAnswers = { ...retosRespuestas, [retoId]: { correct, timedOut: false } };
+    setRetosRespuestas(updatedAnswers);
     setQuestionAnswered(true);
     if (questionTimerRef.current) clearInterval(questionTimerRef.current);
 
-    // Auto advance after 1.5s
+    // Auto advance after 1.5s (pass updatedAnswers to avoid stale closure)
     setTimeout(() => {
-      advanceQuestion();
+      advanceQuestion(updatedAnswers);
     }, 1500);
   };
 
@@ -220,35 +221,36 @@ export default function AlumnoPanel() {
     if (!currentChallenge) return;
     if (retosRespuestas[currentChallenge.id]) return;
 
-    setRetosRespuestas((prev) => ({
-      ...prev,
+    const updatedAnswers = {
+      ...retosRespuestas,
       [currentChallenge.id]: { correct: false, timedOut: true }
-    }));
+    };
+    setRetosRespuestas(updatedAnswers);
     setQuestionAnswered(true);
 
     // Try to vibrate
     if (navigator.vibrate) navigator.vibrate(200);
 
-    // Auto advance after 1.5s
+    // Auto advance after 1.5s (pass updatedAnswers to avoid stale closure)
     setTimeout(() => {
-      advanceQuestion();
+      advanceQuestion(updatedAnswers);
     }, 1500);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeText, currentQuestionIdx, retosRespuestas]);
 
-  const advanceQuestion = () => {
+  const advanceQuestion = (answers: Record<string, { correct: boolean; timedOut: boolean }>) => {
     if (!activeText?.challenges?.length) return;
     if (currentQuestionIdx < activeText.challenges.length - 1) {
       setCurrentQuestionIdx(prev => prev + 1);
       setQuestionAnswered(false);
     } else {
-      // All questions answered, finalize
-      finalizarRetos();
+      // All questions answered, finalize with the complete answers
+      finalizarRetosWithAnswers(answers);
     }
   };
 
-  const finalizarRetos = async () => {
-    const correctCount = Object.values(retosRespuestas).filter(r => r.correct).length;
+  const finalizarRetosWithAnswers = async (answers: Record<string, { correct: boolean; timedOut: boolean }>) => {
+    const correctCount = Object.values(answers).filter(r => r.correct).length;
     const totalChallenges = activeText.challenges.length;
     const challengesScore = totalChallenges > 0 ? Math.round((correctCount / totalChallenges) * 100) : 0;
     const aiScore = aiAnalysis?.score || 0;
