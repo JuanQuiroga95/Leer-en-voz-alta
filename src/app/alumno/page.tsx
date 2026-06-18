@@ -18,7 +18,11 @@ export default function AlumnoPanel() {
   const [audioVisible, setAudioVisible] = useState(false);
   const grabTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const [texts, setTexts] = useState<any[]>([]);
+  // Tabs de modos
+  const [activeTab, setActiveTab] = useState<"EVALUACION" | "PRACTICA">("EVALUACION");
+  const [textsEvaluacion, setTextsEvaluacion] = useState<any[]>([]);
+  const [textsPractica, setTextsPractica] = useState<any[]>([]);
+
   const [activeText, setActiveText] = useState<any>(null);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [aiAudioUrl, setAiAudioUrl] = useState<string | null>(null);
@@ -41,12 +45,17 @@ export default function AlumnoPanel() {
   
   const currentScreen = screenHistory[screenHistory.length - 1];
 
-  useEffect(() => {
+  const fetchTexts = () => {
     fetch('/api/alumno/texts')
       .then(res => res.json())
       .then(data => {
-        if (data.texts) setTexts(data.texts);
+        if (data.evaluacion) setTextsEvaluacion(data.evaluacion);
+        if (data.practica) setTextsPractica(data.practica);
       });
+  };
+
+  useEffect(() => {
+    fetchTexts();
   }, []);
 
   // ----- Real-time word matching -----
@@ -59,193 +68,169 @@ export default function AlumnoPanel() {
 
     // Auto-scroll to current word
     if (textContainerRef.current) {
-      const currentWordEl = textContainerRef.current.querySelector('.word-current');
-      if (currentWordEl) {
-        currentWordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const activeWord = textContainerRef.current.querySelector('.word-pending');
+      if (activeWord) {
+        activeWord.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }, [allWords, activeText, grabando]);
 
-  // ----- Comprehension question timer -----
-  useEffect(() => {
-    if (currentScreen !== 'retos') return;
-    if (!activeText?.challenges?.length) return;
-    if (currentQuestionIdx >= activeText.challenges.length) return;
-    if (questionAnswered) return;
+  const goBack = () => {
+    setScreenHistory(prev => {
+      const next = [...prev];
+      next.pop();
+      return next;
+    });
+  };
 
+  const navigateTo = (screen: Screen) => {
+    setScreenHistory(prev => [...prev, screen]);
+  };
+
+  const goTexto = (t: any) => {
+    setActiveText(t);
+    setWordMatches([]);
+    resetRecognition();
+    navigateTo("texto");
+  };
+
+  const handleEnviarRetos = async () => {
+    if (grabando) return;
+    setIsAnalyzing(true);
+    
+    try {
+      const formData = new FormData();
+      if (audioBlob) {
+        formData.append('audio', audioBlob, 'lectura.webm');
+      }
+      formData.append('textId', activeText.id);
+      formData.append('content', activeText.content);
+      
+      const response = await fetch('/api/ai/analyze-reading', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error('Error en el análisis');
+      
+      const data = await response.json();
+      setAiAnalysis(data.analysis);
+      setAiAudioUrl(data.audioUrl);
+      
+      navigateTo("retos");
+      // Start the timer for the first question
+      startQuestionTimer();
+    } catch (error) {
+      console.error(error);
+      alert('Hubo un error al analizar el audio.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  // ----- COMPREHENSION TIMER LOGIC -----
+  const startQuestionTimer = useCallback(() => {
+    if (questionTimerRef.current) clearInterval(questionTimerRef.current);
     setQuestionTimer(TIMER_PER_QUESTION);
+    setQuestionAnswered(false);
 
-    const timer = setInterval(() => {
+    questionTimerRef.current = setInterval(() => {
       setQuestionTimer(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
-          // Tiempo agotado — marcar como incorrecta y avanzar
-          handleTimeout();
+          clearInterval(questionTimerRef.current!);
+          handleTimeOut();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+  }, [currentQuestionIdx]); // Dependency helps avoid stale closures in setTimeout if needed
 
-    questionTimerRef.current = timer;
-    return () => clearInterval(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentQuestionIdx, currentScreen, questionAnswered]);
-
-  const navigate = (id: Screen) => setScreenHistory((prev) => [...prev, id]);
-  const goBack = () => { if (screenHistory.length > 1) setScreenHistory((prev) => prev.slice(0, -1)); };
-  const goHome = () => setScreenHistory(["home"]);
-  
-  const goTexto = (text: any) => { 
-    if (text.progress?.length > 0 && text.progress[0].status === "COMPLETADO") {
-      alert("¡Ya completaste este texto!");
-      return;
-    }
-    setActiveText(text);
-    navigate("texto"); 
-    resetGrabacion(); 
+  const clearQuestionTimer = () => {
+    if (questionTimerRef.current) clearInterval(questionTimerRef.current);
   };
-  
-  const goRetos = () => {
-    setCurrentQuestionIdx(0);
-    setQuestionAnswered(false);
-    setRetosRespuestas({});
-    navigate("retos");
-  };
-  const goTrofeo = () => navigate("trofeo");
 
-  const iniciarGrabacion = () => {
-    startRecording();
-    if (speechSupported) {
+  // Using refs to access latest state inside setTimeout to prevent React stale closure bugs
+  const latestAnswersRef = useRef<Record<string, { correct: boolean; timedOut: boolean }>>({});
+  const [retosRespuestas, setRetosRespuestas] = useState<Record<string, { correct: boolean; timedOut: boolean }>>({});
+
+  useEffect(() => {
+    latestAnswersRef.current = retosRespuestas;
+  }, [retosRespuestas]);
+
+  const handleTimeOut = useCallback(() => {
+    setQuestionAnswered(true);
+    const retoId = activeText?.challenges[currentQuestionIdx]?.id;
+    if (!retoId) return;
+
+    setRetosRespuestas(prev => ({
+      ...prev,
+      [retoId]: { correct: false, timedOut: true }
+    }));
+
+    setTimeout(() => {
+      moveToNextQuestion(latestAnswersRef.current); // Pass the latest state explicitly
+    }, 2000);
+  }, [activeText, currentQuestionIdx]);
+
+  const toggleGrabacion = () => {
+    if (!grabando) {
+      setAudioVisible(false);
+      setGrabSeg(0);
+      setGrabando(true);
+      setWordMatches([]);
+      startRecording();
       startListening();
-    }
-    setGrabando(true);
-    setGrabSeg(0);
-    setWordMatches([]);
-    grabTimerRef.current = setInterval(() => setGrabSeg((prev) => prev + 1), 1000);
-  };
-
-  const detenerGrabacion = () => {
-    stopRecording();
-    stopListening();
-    setGrabando(false);
-    if (grabTimerRef.current) clearInterval(grabTimerRef.current);
-    setAudioVisible(true);
-
-    // Marcar remaining pending words as wrong (not reached)
-    if (activeText) {
-      const referenceWords = tokenizeText(activeText.content);
-      const finalMatches = matchWords(referenceWords, allWords);
-      setWordMatches(finalMatches);
+      
+      grabTimerRef.current = setInterval(() => {
+        setGrabSeg(s => s + 1);
+      }, 1000);
+    } else {
+      setGrabando(false);
+      stopRecording();
+      stopListening();
+      if (grabTimerRef.current) clearInterval(grabTimerRef.current);
+      setTimeout(() => setAudioVisible(true), 500);
     }
   };
 
-  const toggleGrabacion = () => !grabando ? iniciarGrabacion() : detenerGrabacion();
   const resetGrabacion = () => {
     resetAudio();
     resetRecognition();
-    setGrabando(false);
-    if (grabTimerRef.current) clearInterval(grabTimerRef.current);
-    setGrabSeg(0);
     setAudioVisible(false);
+    setGrabSeg(0);
     setWordMatches([]);
-    setAiAnalysis(null);
-    setAiAudioUrl(null);
   };
 
-  const handleEnviarRetos = async () => {
-    if (audioBlob && activeText) {
-      try {
-        setAudioVisible(false);
-        setGrabando(false);
-        setIsAnalyzing(true);
-        navigate("trofeo"); // Go to trophy screen to show loading
-
-        const formData = new FormData();
-        formData.append('audio', audioBlob, `audio.webm`);
-        formData.append('referenceText', activeText.content);
-        formData.append('readingTimeSeconds', grabSeg.toString());
-
-        const res = await fetch(`/api/ai/analyze-reading`, { method: 'POST', body: formData });
-        const result = await res.json();
-        
-        if (!res.ok) {
-          alert(`Error: ${result.error || 'No se pudo procesar el audio.'}`);
-          setIsAnalyzing(false);
-          goBack();
-          setAudioVisible(true);
-          return;
-        }
-
-        if (result.analysis) {
-          setAiAnalysis(result.analysis);
-          if (result.audioUrl) setAiAudioUrl(result.audioUrl);
-          setIsAnalyzing(false);
-          goRetos();
-        } else {
-          alert("Error: El servidor no devolvió el análisis esperado.");
-          setIsAnalyzing(false);
-          goBack();
-          setAudioVisible(true);
-        }
-      } catch (e) {
-        console.error("Error al analizar el audio", e);
-        alert("Hubo un error de conexión al enviar el audio. Intentá de nuevo.");
-        setIsAnalyzing(false);
-        goBack();
-        setAudioVisible(true);
-      }
-    }
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const formatTime = (seg: number) => `${Math.floor(seg / 60)}:${(seg % 60).toString().padStart(2, "0")}`;
-
-  const [retosRespuestas, setRetosRespuestas] = useState<Record<string, { correct: boolean; timedOut: boolean }>>({});
-
-  const responder = (retoId: string, correct: boolean) => {
-    if (retosRespuestas[retoId]) return; // Already answered
-    const updatedAnswers = { ...retosRespuestas, [retoId]: { correct, timedOut: false } };
-    setRetosRespuestas(updatedAnswers);
+  const selectRetoOption = (retoId: string, isCorrect: boolean) => {
+    if (questionAnswered) return;
+    clearQuestionTimer();
     setQuestionAnswered(true);
-    if (questionTimerRef.current) clearInterval(questionTimerRef.current);
-
-    // Auto advance after 1.5s (pass updatedAnswers to avoid stale closure)
+    
+    setRetosRespuestas(prev => ({
+      ...prev,
+      [retoId]: { correct: isCorrect, timedOut: false }
+    }));
+    
     setTimeout(() => {
-      advanceQuestion(updatedAnswers);
+      moveToNextQuestion(latestAnswersRef.current); // Use ref value for reliability
     }, 1500);
   };
 
-  const handleTimeout = useCallback(() => {
-    if (!activeText?.challenges?.length) return;
-    const currentChallenge = activeText.challenges[currentQuestionIdx];
-    if (!currentChallenge) return;
-    if (retosRespuestas[currentChallenge.id]) return;
-
-    const updatedAnswers = {
-      ...retosRespuestas,
-      [currentChallenge.id]: { correct: false, timedOut: true }
-    };
-    setRetosRespuestas(updatedAnswers);
-    setQuestionAnswered(true);
-
-    // Try to vibrate
-    if (navigator.vibrate) navigator.vibrate(200);
-
-    // Auto advance after 1.5s (pass updatedAnswers to avoid stale closure)
-    setTimeout(() => {
-      advanceQuestion(updatedAnswers);
-    }, 1500);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeText, currentQuestionIdx, retosRespuestas]);
-
-  const advanceQuestion = (answers: Record<string, { correct: boolean; timedOut: boolean }>) => {
-    if (!activeText?.challenges?.length) return;
+  const moveToNextQuestion = (currentAnswers: Record<string, { correct: boolean; timedOut: boolean }>) => {
+    if (!activeText) return;
+    
     if (currentQuestionIdx < activeText.challenges.length - 1) {
       setCurrentQuestionIdx(prev => prev + 1);
-      setQuestionAnswered(false);
+      startQuestionTimer();
     } else {
-      // All questions answered, finalize with the complete answers
-      finalizarRetosWithAnswers(answers);
+      finalizarRetosWithAnswers(currentAnswers);
     }
   };
 
@@ -262,6 +247,7 @@ export default function AlumnoPanel() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         textId: activeText.id,
+        mode: activeText.mode, // ENVIAMOS EL MODO
         aiScore,
         aiAnalysis,
         challengesScore,
@@ -269,16 +255,29 @@ export default function AlumnoPanel() {
       })
     });
 
-    // Recargar textos
-    fetch('/api/alumno/texts').then(res => res.json()).then(data => { if (data.texts) setTexts(data.texts); });
+    fetchTexts();
+    navigateTo("trofeo");
+  };
 
-    goTrofeo();
+  const goTrofeo = () => navigateTo("trofeo");
+  const goStats = () => navigateTo("stats");
+
+  const resetPractice = async (progressId: string) => {
+    if (confirm("¿Querés reiniciar esta lectura de práctica?")) {
+      await fetch('/api/alumno/reset-practice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progressId })
+      });
+      fetchTexts();
+    }
   };
 
   const retosPendientes = activeText?.challenges || [];
   const currentReto = retosPendientes[currentQuestionIdx];
 
-  const trofeosGanados = texts.filter(t => t.progress?.length > 0 && t.progress[0].status === "COMPLETADO").length;
+  // Las lecturas completadas se cuentan globalmente sumando ambas
+  const trofeosGanados = [...textsEvaluacion, ...textsPractica].filter(t => t.progress?.length > 0 && t.progress[0].status === "COMPLETADO").length;
 
   // Timer visual helpers
   const timerPercent = (questionTimer / TIMER_PER_QUESTION) * 100;
@@ -291,8 +290,9 @@ export default function AlumnoPanel() {
   const correctAnswers = Object.values(retosRespuestas).filter(r => r.correct).length;
   const totalQuestions = retosPendientes.length;
   const comprehensionLevel = getComprehensionLevel(correctAnswers, totalQuestions);
-
   const performanceLevelColor = performanceLevel === 'Avanzado' ? '#2e8b57' : performanceLevel === 'Medio' ? '#e8a020' : '#c0392b';
+
+  const currentTexts = activeTab === "EVALUACION" ? textsEvaluacion : textsPractica;
 
   return (
     <>
@@ -318,42 +318,65 @@ export default function AlumnoPanel() {
           </div>
 
           <div className="home-body">
-            <div className="seccion-titulo">Mis logros</div>
-            <div className="trofeos-strip">
-              {trofeosGanados > 0 ? (
-                <div className="trofeo-chip ganado"><span className="tro-emoji">🏆</span><div className="tro-nom">Primera Lectura</div></div>
-              ) : (
-                <div className="trofeo-chip bloqueado"><span className="tro-emoji">🏆</span><div className="tro-nom">Bloqueado</div></div>
-              )}
+            <div className="tabs-container" style={{ display: 'flex', gap: 8, marginBottom: 20, background: 'rgba(255,255,255,0.5)', padding: 6, borderRadius: 16 }}>
+              <button 
+                onClick={() => setActiveTab("EVALUACION")}
+                style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: activeTab === "EVALUACION" ? '#fb7185' : 'transparent', color: activeTab === "EVALUACION" ? '#fff' : '#64748b', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s', boxShadow: activeTab === "EVALUACION" ? '0 4px 10px rgba(244,63,94,0.3)' : 'none' }}>
+                📝 Evaluación
+              </button>
+              <button 
+                onClick={() => setActiveTab("PRACTICA")}
+                style={{ flex: 1, padding: '10px', borderRadius: 12, border: 'none', background: activeTab === "PRACTICA" ? '#3b82f6' : 'transparent', color: activeTab === "PRACTICA" ? '#fff' : '#64748b', fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.2s', boxShadow: activeTab === "PRACTICA" ? '0 4px 10px rgba(59,130,246,0.3)' : 'none' }}>
+                🏋️ Práctica
+              </button>
             </div>
 
-            <div className="seccion-titulo">Mis textos</div>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16, textAlign: 'center', padding: '0 10px' }}>
+              {activeTab === "EVALUACION" 
+                ? "Estas lecturas cuentan para las estadísticas del profesor y solo él puede reiniciarlas." 
+                : "Practicá todo lo que quieras. Estos puntajes no afectan tu promedio final."}
+            </div>
 
-            {texts.map(t => {
-              const completado = t.progress?.length > 0 && t.progress[0].status === "COMPLETADO";
-              return (
-                <div key={t.id} className="texto-card" onClick={() => goTexto(t)}>
-                  <div className="tc-head">
-                    <div className="tc-icono">{completado ? "🌙" : "🦁"}</div>
-                    <div className="tc-info">
-                      <div className="tc-titulo">{t.title}</div>
-                      <div className="tc-autor">{t.author}</div>
+            {currentTexts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 14 }}>
+                No tenés textos asignados en esta sección.
+              </div>
+            ) : (
+              currentTexts.map(t => {
+                const completado = t.progress?.length > 0 && t.progress[0].status === "COMPLETADO";
+                return (
+                  <div key={t.assignmentId} className="texto-card" style={{ borderLeft: `4px solid ${activeTab === 'EVALUACION' ? '#fb7185' : '#3b82f6'}` }}>
+                    <div className="tc-head" onClick={() => !completado && goTexto(t)}>
+                      <div className="tc-icono">{completado ? "🌙" : "🦁"}</div>
+                      <div className="tc-info">
+                        <div className="tc-titulo">{t.title}</div>
+                        <div className="tc-autor">{t.author}</div>
+                      </div>
+                    </div>
+                    <div className="tc-tags" onClick={() => !completado && goTexto(t)}>
+                      {completado ? (
+                        <span className="tag completo">✓ Completado ({t.progress[0].score} pts)</span>
+                      ) : (
+                        <span className="tag pendiente">Pendiente</span>
+                      )}
+                      <span className="tag retos">{t.challenges.length} retos</span>
+                    </div>
+                    {completado && activeTab === "PRACTICA" && (
+                      <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 10, textAlign: 'right' }}>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); resetPractice(t.progress[0].id); }}
+                          style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.1)', color: '#3b82f6', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                          ↻ Leer de nuevo
+                        </button>
+                      </div>
+                    )}
+                    <div className="progreso-barra" style={{ marginTop: completado && activeTab === "PRACTICA" ? 10 : 16 }}>
+                      <div className="progreso-fill" style={{ width: completado ? "100%" : "0%", background: activeTab === "EVALUACION" ? '#fb7185' : '#3b82f6' }}></div>
                     </div>
                   </div>
-                  <div className="tc-tags">
-                    {completado ? (
-                      <span className="tag completo">✓ Completado ({t.progress[0].score} pts)</span>
-                    ) : (
-                      <span className="tag pendiente">Pendiente</span>
-                    )}
-                    <span className="tag retos">{t.challenges.length} retos</span>
-                  </div>
-                  <div className="progreso-barra">
-                    <div className="progreso-fill" style={{ width: completado ? "100%" : "0%" }}></div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -361,8 +384,8 @@ export default function AlumnoPanel() {
         <div className={`screen ${currentScreen === "texto" ? "active" : ""}`} id="s-texto">
           {activeText && (
             <>
-              <div className="texto-hero">
-                <div className="th-label">Lectura</div>
+              <div className="texto-hero" style={{ background: activeText.mode === 'EVALUACION' ? 'linear-gradient(135deg, #f43f5e, #fb7185)' : 'linear-gradient(135deg, #2563eb, #3b82f6)' }}>
+                <div className="th-label">{activeText.mode === 'EVALUACION' ? 'Evaluación Oficial' : 'Modo Práctica'}</div>
                 <div className="th-titulo">{activeText.title}</div>
                 <div className="th-autor">{activeText.author}</div>
                 <div className="th-chips">
@@ -410,7 +433,7 @@ export default function AlumnoPanel() {
 
                 <div className="grabadora">
                   <div className="grab-titulo">🎙️ Leé este texto en voz alta</div>
-                  <button className={`grab-btn-mic ${grabando ? "grabando" : ""}`} onClick={toggleGrabacion} disabled={audioVisible}>
+                  <button className={`grab-btn-mic ${grabando ? "grabando" : ""}`} onClick={toggleGrabacion} disabled={audioVisible || isAnalyzing}>
                     {grabando ? "⏹" : audioVisible ? "✓" : "🎙️"}
                   </button>
                   <div className={`grab-estado ${grabando ? "activo" : ""}`}>
@@ -425,8 +448,10 @@ export default function AlumnoPanel() {
 
                   {audioVisible && (
                     <>
-                      <button className="btn-regrabar" onClick={resetGrabacion}>↺ Grabar de nuevo</button>
-                      <button className="btn-enviar" onClick={handleEnviarRetos}>Continuar a los retos →</button>
+                      <button className="btn-regrabar" onClick={resetGrabacion} disabled={isAnalyzing}>↺ Grabar de nuevo</button>
+                      <button className="btn-enviar" onClick={handleEnviarRetos} disabled={isAnalyzing}>
+                        {isAnalyzing ? "Analizando audio (IA)... ⏳" : "Continuar a los retos →"}
+                      </button>
                     </>
                   )}
                 </div>
@@ -439,7 +464,7 @@ export default function AlumnoPanel() {
         <div className={`screen ${currentScreen === "retos" ? "active" : ""}`} id="s-retos">
           {activeText && (
             <>
-              <div className="retos-header">
+              <div className="retos-header" style={{ background: activeText.mode === 'EVALUACION' ? 'linear-gradient(135deg, #f43f5e, #fb7185)' : 'linear-gradient(135deg, #2563eb, #3b82f6)' }}>
                 <h2>🎯 Retos de comprensión</h2>
                 <p>{activeText.title} · {totalQuestions} retos · ⏱️ {TIMER_PER_QUESTION}s por pregunta</p>
               </div>
@@ -448,173 +473,142 @@ export default function AlumnoPanel() {
                 {/* Progress dots */}
                 <div className="question-progress">
                   {retosPendientes.map((_: any, idx: number) => {
-                    const retoId = retosPendientes[idx]?.id;
-                    const answer = retosRespuestas[retoId];
-                    let dotClass = '';
-                    if (idx === currentQuestionIdx) dotClass = 'active';
-                    else if (answer?.correct) dotClass = 'answered';
-                    else if (answer?.timedOut) dotClass = 'timeout';
-                    else if (answer && !answer.correct) dotClass = 'wrong';
-                    return <div key={idx} className={`q-dot ${dotClass}`}></div>;
+                    const status = idx < currentQuestionIdx ? 'done' : idx === currentQuestionIdx ? 'active' : 'pending';
+                    return <div key={idx} className={`q-dot ${status}`}></div>;
                   })}
                 </div>
 
-                {/* Timer */}
-                {currentReto && !retosRespuestas[currentReto.id] && (
-                  <div className="timer-container">
-                    <div className="timer-header">
-                      <div className="timer-label">Tiempo restante</div>
-                      <div className={`timer-seconds ${timerColorClass}`}>
-                        {questionTimer}s
-                      </div>
-                    </div>
-                    <div className="timer-bar">
-                      <div
-                        className={`timer-bar-fill ${timerColorClass}`}
-                        style={{ width: `${timerPercent}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                )}
+                {/* Timer Bar */}
+                <div className="timer-container">
+                  <div className={`timer-bar ${timerColorClass}`} style={{ width: `${timerPercent}%` }}></div>
+                  <div className="timer-text">{questionTimer}s</div>
+                </div>
 
-                {/* Current question */}
-                {currentReto && (
-                  <div className="reto-card-single" key={`q-${currentQuestionIdx}`}>
-                    <div className="rc-num">Pregunta {currentQuestionIdx + 1} de {totalQuestions}</div>
-                    <div className="rc-pregunta">{currentReto.question}</div>
+                {currentReto ? (
+                  <div className="reto-card current">
+                    <div className="reto-q-num">Pregunta {currentQuestionIdx + 1} de {totalQuestions}</div>
+                    <div className="reto-q">{currentReto.question}</div>
                     
-                    {retosRespuestas[currentReto.id]?.timedOut ? (
-                      <div className="reto-timeout-overlay">
-                        <div className="timeout-icon">⏰</div>
-                        <div className="timeout-msg">¡Se acabó el tiempo!</div>
-                      </div>
-                    ) : (
-                      <div className="opciones">
-                        {JSON.parse(currentReto.options).map((opc: string, idx: number) => {
-                          const answer = retosRespuestas[currentReto.id];
-                          let className = 'opcion';
-                          if (answer) {
-                            if (idx === currentReto.correctIdx) className += ' correcta';
-                            else if (!answer.correct && idx !== currentReto.correctIdx) className += ' incorrecta';
-                          }
-                          return (
-                            <div
-                              key={idx}
-                              className={className}
-                              onClick={() => {
-                                if (!retosRespuestas[currentReto.id]) {
-                                  responder(currentReto.id, idx === currentReto.correctIdx);
-                                }
-                              }}
-                            >
-                              {opc}
-                            </div>
-                          );
-                        })}
-                      </div>
+                    {questionAnswered && retosRespuestas[currentReto.id]?.timedOut && (
+                      <div className="timeout-msg">⏰ ¡Se acabó el tiempo!</div>
                     )}
+
+                    <div className="reto-options" style={{ pointerEvents: questionAnswered ? 'none' : 'auto', opacity: questionAnswered ? 0.7 : 1 }}>
+                      {JSON.parse(currentReto.options).map((opt: string, i: number) => {
+                        const isSelected = retosRespuestas[currentReto.id] !== undefined;
+                        const isCorrectOption = i === currentReto.correctIdx;
+                        // Muestra el color de la respuesta seleccionada solo cuando el usuario respondió
+                        let optClass = "reto-opt";
+                        if (isSelected) {
+                          if (isCorrectOption) optClass += " correct";
+                          else if (!retosRespuestas[currentReto.id].correct && i !== currentReto.correctIdx) {
+                            // If this was the wrong answer picked (though we don't strictly track WHICH wrong answer was picked in state)
+                            // We will just highlight correct green, and if we timed out, no red.
+                            // If they clicked a wrong one, we just color the selected one red (but we don't have selectedIdx saved)
+                            // For simplicity, we just show the correct one in green.
+                          }
+                        }
+                        
+                        return (
+                          <button key={i} className={optClass} onClick={() => selectRetoOption(currentReto.id, i === currentReto.correctIdx)}>
+                            <div className="opt-marker">{["A","B","C","D"][i] || "-"}</div>
+                            <div className="opt-text">{opt}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+                ) : (
+                  <div style={{ textAlign: "center", padding: 40, color: "#64748b" }}>Cargando retos...</div>
                 )}
               </div>
             </>
           )}
         </div>
 
-        {/* TROFEO - with census metrics */}
-        <div className={`screen ${currentScreen === "trofeo" ? "active" : ""}`} id="s-trofeo" style={{ display: currentScreen === "trofeo" ? "flex" : "none" }}>
-          {isAnalyzing ? (
-            <div className="analysis-loading">
-              <div className="analysis-spinner"></div>
-              <div className="analysis-loading-text">
-                🤖 El Profe Robot está analizando<br/>tu lectura...
+        {/* TROFEO */}
+        <div className={`screen ${currentScreen === "trofeo" ? "active" : ""}`} id="s-trofeo">
+          <div className="trofeo-container">
+            <div className="trofeo-glare"></div>
+            <div className="trofeo-emoji">🏆</div>
+            <div className="trofeo-titulo">¡Texto completado!</div>
+            <div className="trofeo-sub">Sumaste {scoreTotal} puntos a tu cuenta.</div>
+            <button className="btn-volver" onClick={goStats}>Ver mis resultados →</button>
+          </div>
+        </div>
+
+        {/* STATS */}
+        <div className={`screen ${currentScreen === "stats" ? "active" : ""}`} id="s-stats">
+          <div className="stats-header">
+            <h2>📈 Tu Rendimiento</h2>
+            <p>Resultados del análisis de IA y comprensión.</p>
+          </div>
+          
+          <div className="stats-body">
+            {/* Censo Metrics Header */}
+            <div style={{ background: '#fff', borderRadius: 16, padding: 20, marginBottom: 20, boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 10 }}>Nivel de Desempeño (DGE)</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: performanceLevelColor }}>
+                {performanceLevel}
               </div>
             </div>
-          ) : (
-            <>
-              <div className="trofeo-anim">🏆</div>
-              <div className="trofeo-titulo">¡Texto Completado!</div>
-              <div className="trofeo-desc">
-                {aiAnalysis?.feedback || 'Gracias a tu lectura y tus respuestas, sumaste una gran puntuación.'}
-              </div>
 
-              {/* Census metrics */}
-              <div className="census-results">
-                <div className="census-card">
-                  <div className="census-label">Palabras por Minuto</div>
-                  <div className="census-value">{ppm}</div>
-                  <div className="census-level-badge" style={{ background: `${performanceLevelColor}30`, color: performanceLevelColor }}>
-                    {performanceLevel}
+            {/* Grid of primary metrics */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+              <div className="stat-box">
+                <div className="sb-label">PPM (Palabras/Min)</div>
+                <div className="sb-val" style={{ color: '#2563eb' }}>{ppm}</div>
+              </div>
+              <div className="stat-box">
+                <div className="sb-label">Prosodia</div>
+                <div className="sb-val" style={{ color: '#8b5cf6', fontSize: 24 }}>
+                  {"⭐".repeat(prosody)}{"☆".repeat(3 - prosody)}
+                </div>
+              </div>
+              <div className="stat-box">
+                <div className="sb-label">Comprensión</div>
+                <div className="sb-val" style={{ color: '#10b981' }}>{correctAnswers}/{totalQuestions}</div>
+                <div style={{ fontSize: 12, color: comprehensionLevel.color, marginTop: 4, fontWeight: 600 }}>Nivel: {comprehensionLevel.level}</div>
+              </div>
+              <div className="stat-box">
+                <div className="sb-label">Precisión Lectora</div>
+                <div className="sb-val" style={{ color: '#f59e0b' }}>{aiAnalysis?.score || 0}/100</div>
+              </div>
+            </div>
+
+            {/* Error Breakdown */}
+            {aiAnalysis && (
+              <div style={{ background: '#fff', borderRadius: 16, padding: 20, marginBottom: 20, boxShadow: '0 4px 15px rgba(0,0,0,0.05)' }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#1e293b', marginBottom: 16 }}>Desglose de Errores (DGE)</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Palabras omitidas</span>
+                    <span style={{ color: '#ef4444', fontWeight: 800 }}>{aiAnalysis.omittedWords?.length || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Palabras sustituidas</span>
+                    <span style={{ color: '#f59e0b', fontWeight: 800 }}>{aiAnalysis.substitutedWords?.length || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid #f1f5f9' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Palabras inventadas</span>
+                    <span style={{ color: '#ef4444', fontWeight: 800 }}>{aiAnalysis.inventedWords?.length || 0}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Autocorrecciones</span>
+                    <span style={{ color: '#10b981', fontWeight: 800 }}>{aiAnalysis.selfCorrectedWords?.length || 0}</span>
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div className="census-card" style={{ flex: 1 }}>
-                    <div className="census-label">Prosodia</div>
-                    <div className="prosody-stars">
-                      {[1, 2, 3].map(n => (
-                        <span key={n}>{n <= prosody ? '⭐' : '☆'}</span>
-                      ))}
-                    </div>
-                    <div className="census-sublabel">
-                      {prosody === 3 ? 'Alta' : prosody === 2 ? 'Media' : 'Baja'}
-                    </div>
-                  </div>
-
-                  <div className="census-card" style={{ flex: 1 }}>
-                    <div className="census-label">Comprensión</div>
-                    <div className="census-value" style={{ fontSize: '20px' }}>
-                      {correctAnswers}/{totalQuestions}
-                    </div>
-                    <div className="census-level-badge" style={{ background: `${comprehensionLevel.color}30`, color: comprehensionLevel.color }}>
-                      {comprehensionLevel.level}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="census-card">
-                  <div className="census-label">Fluidez (IA)</div>
-                  <div className="census-value">{aiAnalysis?.score || 0}<span style={{ fontSize: '14px', color: '#a8d4f5' }}>/100</span></div>
-                </div>
-
-                {/* Word analysis summary */}
-                {aiAnalysis && (
-                  <div className="census-card">
-                    <div className="census-label">Detalle de lectura</div>
-                    <div className="word-analysis-summary">
-                      {aiAnalysis.omittedWords?.length > 0 && (
-                        <div className="was-item wrong">
-                          {aiAnalysis.omittedWords.length} omitidas
-                        </div>
-                      )}
-                      {aiAnalysis.substitutedWords?.length > 0 && (
-                        <div className="was-item close">
-                          {aiAnalysis.substitutedWords.length} sustituidas
-                        </div>
-                      )}
-                      {aiAnalysis.inventedWords?.length > 0 && (
-                        <div className="was-item wrong">
-                          {aiAnalysis.inventedWords.length} inventadas
-                        </div>
-                      )}
-                      {aiAnalysis.selfCorrectedWords?.length > 0 && (
-                        <div className="was-item correct">
-                          {aiAnalysis.selfCorrectedWords.length} autocorregidas ✓
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
+            )}
 
-              <div className="trofeo-puntos">
-                <div className="pts-num">+{scoreTotal}</div>
-                <div className="pts-lbl">puntos totales</div>
-              </div>
-              <button className="btn-continuar" onClick={goHome}>Volver al Inicio →</button>
-            </>
-          )}
+            <div className="stats-feedback">
+              <div className="sf-title">Robot Profe dice:</div>
+              <div className="sf-text">{aiAnalysis?.feedback || "¡Excelente trabajo! Seguí practicando así."}</div>
+            </div>
+
+            <button className="btn-volver" onClick={() => setScreenHistory(["home"])}>Volver al inicio</button>
+          </div>
         </div>
-
       </div>
     </>
   );

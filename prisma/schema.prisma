@@ -18,9 +18,10 @@ model User {
   password  String
   name      String
   role      Role     @default(ALUMNO)
-  division  String?  // Ejemplo: "2° B"
+  division  String?  // Ejemplo: "2° 1ra"
   progress  ReadingProgress[]
   trophies  Trophy[]
+  assignments TextAssignment[]
   createdAt DateTime @default(now())
 }
 
@@ -33,6 +34,7 @@ model Text {
   year      Int      // 1, 2, 3, 4, 5
   challenges Challenge[]
   progress  ReadingProgress[]
+  assignments TextAssignment[]
 }
 
 model Challenge {
@@ -44,6 +46,21 @@ model Challenge {
   correctIdx Int      // Índice de la opción correcta
 }
 
+// Asignación de textos a cursos o alumnos individuales
+model TextAssignment {
+  id        String   @id @default(uuid())
+  textId    String
+  text      Text     @relation(fields: [textId], references: [id], onDelete: Cascade)
+  mode      String   // "EVALUACION" o "PRACTICA"
+
+  // Target: curso completo o alumno individual
+  division  String?  // Ej: "2° 1ra" → todos los alumnos de ese curso
+  userId    String?  // Alumno individual
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
 model ReadingProgress {
   id         String   @id @default(uuid())
   userId     String
@@ -51,6 +68,7 @@ model ReadingProgress {
   textId     String
   text       Text     @relation(fields: [textId], references: [id])
   status     String   // "PENDIENTE", "INICIADO", "COMPLETADO"
+  mode       String   @default("PRACTICA") // "EVALUACION" o "PRACTICA"
   audioUrl   String?  // URL de Vercel Blob
   score      Int      @default(0)
   

@@ -9,13 +9,11 @@ export async function GET() {
   }
 
   try {
-    // Obtener el profesor para saber su división
     const profesor = await prisma.user.findUnique({
       where: { id: session.userId },
       select: { name: true, division: true }
     });
 
-    // Obtener TODOS los alumnos con su progreso, agrupados por división
     const students = await prisma.user.findMany({
       where: { role: 'ALUMNO' },
       include: {
@@ -27,13 +25,19 @@ export async function GET() {
       orderBy: [{ division: 'asc' }, { name: 'asc' }]
     });
 
-    // Obtener todas las divisiones únicas
     const divisions = [...new Set(students.map(s => s.division).filter(Boolean))] as string[];
 
-    // Obtener todos los textos disponibles
     const texts = await prisma.text.findMany({
       select: { id: true, title: true, author: true, level: true, year: true },
       orderBy: { title: 'asc' }
+    });
+
+    const assignments = await prisma.textAssignment.findMany({
+      include: {
+        text: { select: { id: true, title: true } },
+        user: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' }
     });
 
     return NextResponse.json({
@@ -44,6 +48,7 @@ export async function GET() {
       students,
       divisions,
       texts,
+      assignments,
     });
   } catch (error) {
     console.error(error);

@@ -209,7 +209,24 @@ export default function AdminPanel() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>División</label>
-                  <input value={formData.division} onChange={e => setFormData({...formData, division: e.target.value})} placeholder="Ej: 2° B" style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
+                  <select value={formData.division} onChange={e => setFormData({...formData, division: e.target.value})} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }}>
+                    <option value="">Sin división</option>
+                    <optgroup label="1° Año">
+                      <option value="1° 1ra">1° 1ra</option><option value="1° 2da">1° 2da</option><option value="1° 3ra">1° 3ra</option><option value="1° 4ta">1° 4ta</option><option value="1° 5ta">1° 5ta</option>
+                    </optgroup>
+                    <optgroup label="2° Año">
+                      <option value="2° 1ra">2° 1ra</option><option value="2° 2da">2° 2da</option><option value="2° 3ra">2° 3ra</option><option value="2° 4ta">2° 4ta</option><option value="2° 5ta">2° 5ta</option>
+                    </optgroup>
+                    <optgroup label="3° Año">
+                      <option value="3° 1ra">3° 1ra</option><option value="3° 2da">3° 2da</option><option value="3° 3ra">3° 3ra</option><option value="3° 4ta">3° 4ta</option><option value="3° 5ta">3° 5ta</option>
+                    </optgroup>
+                    <optgroup label="4° Año">
+                      <option value="4° 1ra">4° 1ra</option><option value="4° 2da">4° 2da</option><option value="4° 3ra">4° 3ra</option><option value="4° 4ta">4° 4ta</option>
+                    </optgroup>
+                    <optgroup label="5° Año">
+                      <option value="5° 1ra">5° 1ra</option><option value="5° 2da">5° 2da</option><option value="5° 3ra">5° 3ra</option><option value="5° 4ta">5° 4ta</option>
+                    </optgroup>
+                  </select>
                 </div>
               </div>
 
