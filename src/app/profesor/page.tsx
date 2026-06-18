@@ -240,7 +240,7 @@ export default function ProfesorPanel() {
         <div style={S.tabBar}>
           <button style={S.tab(view === "general")} onClick={goGeneral}>📋 Vista General</button>
           <button style={S.tab(view === "curso")} onClick={() => { if (divisions.length > 0) goCurso(selectedDivision || divisions[0]); }}>🏫 Por Curso</button>
-          <button style={S.tab(view === "alumno")} onClick={() => {}} disabled={!selectedStudent}>👤 Por Alumno</button>
+          <button style={S.tab(view === "alumno")} onClick={() => setView("alumno")}>👤 Por Alumno</button>
           <button style={S.tab(view === "asignaciones")} onClick={goAsignaciones}>📝 Asignar Textos</button>
         </div>
 
@@ -499,6 +499,27 @@ export default function ProfesorPanel() {
             )}
 
             {/* ═══════════ VISTA POR ALUMNO ═══════════ */}
+            {view === "alumno" && !selectedStudent && (
+              <div style={S.card}>
+                <div style={S.cardTitle}>Seleccionar Alumno</div>
+                {students.length === 0 ? (
+                  <div style={S.empty}>No hay alumnos registrados.</div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+                    {students.map(s => (
+                      <div key={s.id} onClick={() => goAlumno(s)} 
+                           style={{ padding: '16px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: '12px', cursor: 'pointer', border: '1px solid rgba(59, 130, 246, 0.1)', transition: 'background 0.2s' }}
+                           onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(59, 130, 246, 0.15)")}
+                           onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(59, 130, 246, 0.05)")}>
+                        <div style={{ fontWeight: 'bold', color: '#f1f5f9', fontSize: '15px' }}>{s.name}</div>
+                        <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{s.division || "Sin curso"} · Legajo: {s.legajo}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {view === "alumno" && selectedStudent && (
               <>
                 <div style={S.breadcrumb}>
