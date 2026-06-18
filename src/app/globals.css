@@ -402,3 +402,276 @@ body {
   text-align: center; margin-bottom: 10px; letter-spacing: 0.5px;
   text-transform: uppercase;
 }
+
+/* ===================== PALABRAS EN TIEMPO REAL ===================== */
+.texto-contenido-live {
+  font-family: 'Lora', serif; font-size: 15px; line-height: 2.2;
+  color: #2c3e50; margin-bottom: 20px;
+  padding: 16px; background: #fafbfd; border-radius: 12px;
+  border-left: 3px solid var(--celeste);
+  max-height: 240px; overflow-y: auto; scroll-behavior: smooth;
+}
+
+.word {
+  display: inline; padding: 2px 1px; border-radius: 4px;
+  transition: all 0.3s ease; cursor: default;
+  position: relative;
+}
+
+.word-pending { color: #8899aa; }
+
+.word-current {
+  color: var(--azul);
+  background: rgba(45, 106, 159, 0.12);
+  border-bottom: 2px solid var(--celeste);
+  animation: wordPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes wordPulse {
+  0%, 100% { background: rgba(45, 106, 159, 0.08); }
+  50% { background: rgba(45, 106, 159, 0.2); }
+}
+
+.word-correct {
+  color: #1a7a3a;
+  background: rgba(46, 139, 87, 0.12);
+  border-bottom: 2px solid #2e8b57;
+}
+
+.word-close {
+  color: #b06000;
+  background: rgba(232, 160, 32, 0.15);
+  border-bottom: 2px solid #e8a020;
+}
+
+.word-wrong {
+  color: #b02020;
+  background: rgba(192, 57, 43, 0.1);
+  border-bottom: 2px solid #c0392b;
+  text-decoration: line-through;
+  text-decoration-color: rgba(192, 57, 43, 0.4);
+}
+
+.word-legend {
+  display: flex; gap: 12px; justify-content: center;
+  padding: 8px 0 4px; flex-wrap: wrap;
+}
+.word-legend-item {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; color: var(--gris-texto);
+}
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+}
+.legend-dot.green { background: #2e8b57; }
+.legend-dot.orange { background: #e8a020; }
+.legend-dot.red { background: #c0392b; }
+.legend-dot.gray { background: #8899aa; }
+
+/* Badge de reconocimiento de voz */
+.speech-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 10px; font-weight: 700;
+  margin-bottom: 8px;
+}
+.speech-badge.listening {
+  background: rgba(46, 139, 87, 0.12); color: #1a7a3a;
+  animation: speechPulse 2s ease-in-out infinite;
+}
+.speech-badge.off {
+  background: rgba(136, 153, 170, 0.12); color: #8899aa;
+}
+@keyframes speechPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+/* ===================== COMPRENSIÓN CON TIMER ===================== */
+.retos-single-view {
+  padding: 16px; flex: 1;
+  display: flex; flex-direction: column;
+}
+
+.question-progress {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; margin-bottom: 16px;
+}
+.q-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #dde6f0; transition: all 0.3s;
+}
+.q-dot.active { background: var(--celeste); transform: scale(1.3); }
+.q-dot.answered { background: var(--verde); }
+.q-dot.wrong { background: var(--rojo); }
+.q-dot.timeout { background: var(--gris-texto); }
+
+/* Timer Bar */
+.timer-container {
+  margin-bottom: 16px;
+}
+.timer-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px;
+}
+.timer-label {
+  font-size: 11px; font-weight: 700; color: var(--gris-texto);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.timer-seconds {
+  font-size: 18px; font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+.timer-seconds.safe { color: var(--verde); }
+.timer-seconds.warning { color: var(--dorado); }
+.timer-seconds.danger { color: var(--rojo); }
+
+.timer-bar {
+  height: 6px; background: #dde6f0; border-radius: 10px;
+  overflow: hidden;
+}
+.timer-bar-fill {
+  height: 100%; border-radius: 10px;
+  transition: width 1s linear, background 0.5s;
+}
+.timer-bar-fill.safe { background: linear-gradient(90deg, #2e8b57, #4ac27a); }
+.timer-bar-fill.warning { background: linear-gradient(90deg, #e8a020, #f0c040); }
+.timer-bar-fill.danger { background: linear-gradient(90deg, #c0392b, #e74c3c); animation: timerShake 0.5s ease-in-out; }
+
+@keyframes timerShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* Single question card con transición */
+.reto-card-single {
+  background: white; border-radius: 18px; padding: 24px 20px;
+  box-shadow: var(--sombra-lg); animation: slideInQuestion 0.4s ease-out;
+  flex: 1; display: flex; flex-direction: column;
+}
+@keyframes slideInQuestion {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.reto-card-single .rc-num {
+  font-size: 10px; font-weight: 800; color: var(--celeste);
+  text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+}
+.reto-card-single .rc-pregunta {
+  font-size: 16px; font-weight: 700; color: #2c3e50;
+  margin-bottom: 20px; line-height: 1.5;
+}
+.reto-card-single .opciones {
+  display: flex; flex-direction: column; gap: 10px;
+}
+.reto-card-single .opcion {
+  padding: 14px 16px; border: 2px solid #dde6f0; border-radius: 12px;
+  font-size: 14px; color: #2c3e50; cursor: pointer; transition: all 0.2s;
+  font-weight: 600;
+}
+.reto-card-single .opcion:hover { border-color: var(--celeste); background: var(--cielo); }
+.reto-card-single .opcion.correcta { 
+  border-color: var(--verde); background: var(--verde-claro); color: var(--verde);
+  animation: correctPop 0.3s ease-out;
+}
+.reto-card-single .opcion.incorrecta { 
+  border-color: var(--rojo); background: #fdf0ef; color: var(--rojo); 
+}
+.reto-card-single .opcion.timeout-wrong {
+  border-color: var(--gris-texto); background: #f0f0f0; color: var(--gris-texto);
+}
+
+@keyframes correctPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+.reto-timeout-overlay {
+  text-align: center; padding: 20px;
+  animation: fadeIn 0.3s;
+}
+.reto-timeout-overlay .timeout-icon {
+  font-size: 40px; margin-bottom: 8px;
+}
+.reto-timeout-overlay .timeout-msg {
+  font-size: 14px; font-weight: 700; color: var(--rojo);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ===================== RESULTADOS CENSO MENDOZA ===================== */
+.census-results {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 0 4px;
+  max-width: 300px; margin: 0 auto;
+  width: 100%;
+}
+
+.census-card {
+  background: rgba(255,255,255,0.12); border-radius: 14px;
+  padding: 14px 16px; text-align: center;
+}
+.census-card .census-label {
+  font-size: 10px; font-weight: 700; color: #a8d4f5;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  margin-bottom: 4px;
+}
+.census-card .census-value {
+  font-size: 26px; font-weight: 900; color: white;
+}
+.census-card .census-sublabel {
+  font-size: 11px; color: #c8dff5; margin-top: 2px;
+}
+.census-level-badge {
+  display: inline-block; padding: 4px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 800;
+  margin-top: 4px;
+}
+
+/* Prosodia estrellas */
+.prosody-stars {
+  display: flex; gap: 4px; justify-content: center;
+  font-size: 22px; margin-top: 4px;
+}
+
+/* Word analysis summary in trophy */
+.word-analysis-summary {
+  display: flex; gap: 8px; justify-content: center;
+  flex-wrap: wrap; margin-top: 8px;
+}
+.was-item {
+  display: flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 700;
+}
+.was-item.correct { background: rgba(46,139,87,0.2); color: #90eeb0; }
+.was-item.close { background: rgba(232,160,32,0.2); color: #f0d080; }
+.was-item.wrong { background: rgba(192,57,43,0.2); color: #f0a0a0; }
+
+/* Loading spinner for analysis */
+.analysis-loading {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; padding: 40px 20px;
+}
+.analysis-spinner {
+  width: 48px; height: 48px;
+  border: 4px solid rgba(255,255,255,0.2);
+  border-top: 4px solid white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.analysis-loading-text {
+  font-size: 14px; color: #a8d4f5; font-weight: 600;
+  text-align: center;
+}

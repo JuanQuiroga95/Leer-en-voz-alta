@@ -1,10 +1,15 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAudioRecorder } from "@/lib/useAudioRecorder";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { tokenizeText, matchWords, calculatePPM, getPerformanceLevel, getComprehensionLevel } from "@/lib/textMatcher";
+import type { WordMatch } from "@/lib/textMatcher";
 import { useRouter } from "next/navigation";
 
 type Screen = "login" | "home" | "texto" | "retos" | "trofeo" | "stats";
+
+const TIMER_PER_QUESTION = 30; // segundos por pregunta
 
 export default function AlumnoPanel() {
   const [screenHistory, setScreenHistory] = useState<Screen[]>(["home"]);
@@ -18,8 +23,20 @@ export default function AlumnoPanel() {
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [aiAudioUrl, setAiAudioUrl] = useState<string | null>(null);
   const [scoreTotal, setScoreTotal] = useState(0);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Real-time word tracking
+  const [wordMatches, setWordMatches] = useState<WordMatch[]>([]);
+  const textContainerRef = useRef<HTMLDivElement>(null);
+
+  // Comprehension timer
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+  const [questionTimer, setQuestionTimer] = useState(TIMER_PER_QUESTION);
+  const [questionAnswered, setQuestionAnswered] = useState(false);
+  const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { isRecording, audioBlob, audioUrl, startRecording, stopRecording, resetRecording: resetAudio } = useAudioRecorder();
+  const { isListening, isSupported: speechSupported, allWords, startListening, stopListening, resetRecognition } = useSpeechRecognition();
   const router = useRouter();
   
   const currentScreen = screenHistory[screenHistory.length - 1];
@@ -31,6 +48,49 @@ export default function AlumnoPanel() {
         if (data.texts) setTexts(data.texts);
       });
   }, []);
+
+  // ----- Real-time word matching -----
+  useEffect(() => {
+    if (!activeText || !grabando) return;
+    const referenceWords = tokenizeText(activeText.content);
+    const currentIdx = allWords.length;
+    const matches = matchWords(referenceWords, allWords, currentIdx);
+    setWordMatches(matches);
+
+    // Auto-scroll to current word
+    if (textContainerRef.current) {
+      const currentWordEl = textContainerRef.current.querySelector('.word-current');
+      if (currentWordEl) {
+        currentWordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [allWords, activeText, grabando]);
+
+  // ----- Comprehension question timer -----
+  useEffect(() => {
+    if (currentScreen !== 'retos') return;
+    if (!activeText?.challenges?.length) return;
+    if (currentQuestionIdx >= activeText.challenges.length) return;
+    if (questionAnswered) return;
+
+    setQuestionTimer(TIMER_PER_QUESTION);
+
+    const timer = setInterval(() => {
+      setQuestionTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Tiempo agotado — marcar como incorrecta y avanzar
+          handleTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    questionTimerRef.current = timer;
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentQuestionIdx, currentScreen, questionAnswered]);
 
   const navigate = (id: Screen) => setScreenHistory((prev) => [...prev, id]);
   const goBack = () => { if (screenHistory.length > 1) setScreenHistory((prev) => prev.slice(0, -1)); };
@@ -46,31 +106,51 @@ export default function AlumnoPanel() {
     resetGrabacion(); 
   };
   
-  const goRetos = () => navigate("retos");
+  const goRetos = () => {
+    setCurrentQuestionIdx(0);
+    setQuestionAnswered(false);
+    setRetosRespuestas({});
+    navigate("retos");
+  };
   const goTrofeo = () => navigate("trofeo");
-  const goStats = () => navigate("stats");
 
   const iniciarGrabacion = () => {
     startRecording();
+    if (speechSupported) {
+      startListening();
+    }
     setGrabando(true);
     setGrabSeg(0);
+    setWordMatches([]);
     grabTimerRef.current = setInterval(() => setGrabSeg((prev) => prev + 1), 1000);
   };
 
   const detenerGrabacion = () => {
     stopRecording();
+    stopListening();
     setGrabando(false);
     if (grabTimerRef.current) clearInterval(grabTimerRef.current);
     setAudioVisible(true);
+
+    // Marcar remaining pending words as wrong (not reached)
+    if (activeText) {
+      const referenceWords = tokenizeText(activeText.content);
+      const finalMatches = matchWords(referenceWords, allWords);
+      setWordMatches(finalMatches);
+    }
   };
 
   const toggleGrabacion = () => !grabando ? iniciarGrabacion() : detenerGrabacion();
   const resetGrabacion = () => {
     resetAudio();
+    resetRecognition();
     setGrabando(false);
     if (grabTimerRef.current) clearInterval(grabTimerRef.current);
     setGrabSeg(0);
     setAudioVisible(false);
+    setWordMatches([]);
+    setAiAnalysis(null);
+    setAiAudioUrl(null);
   };
 
   const handleEnviarRetos = async () => {
@@ -78,33 +158,41 @@ export default function AlumnoPanel() {
       try {
         setAudioVisible(false);
         setGrabando(false);
-        alert('Analizando tu lectura con el Profe Robot... por favor espera.');
+        setIsAnalyzing(true);
+        navigate("trofeo"); // Go to trophy screen to show loading
 
         const formData = new FormData();
         formData.append('audio', audioBlob, `audio.webm`);
         formData.append('referenceText', activeText.content);
+        formData.append('readingTimeSeconds', grabSeg.toString());
 
         const res = await fetch(`/api/ai/analyze-reading`, { method: 'POST', body: formData });
         const result = await res.json();
         
         if (!res.ok) {
           alert(`Error: ${result.error || 'No se pudo procesar el audio.'}`);
+          setIsAnalyzing(false);
+          goBack();
           setAudioVisible(true);
-          return; // Detener flujo para no poner un cero
+          return;
         }
 
         if (result.analysis) {
           setAiAnalysis(result.analysis);
           if (result.audioUrl) setAiAudioUrl(result.audioUrl);
-          alert(`¡Análisis completado!\nFluidez: ${result.analysis.score}/100\nFeedback: ${result.analysis.feedback}`);
+          setIsAnalyzing(false);
           goRetos();
         } else {
           alert("Error: El servidor no devolvió el análisis esperado.");
+          setIsAnalyzing(false);
+          goBack();
           setAudioVisible(true);
         }
       } catch (e) {
         console.error("Error al analizar el audio", e);
         alert("Hubo un error de conexión al enviar el audio. Intentá de nuevo.");
+        setIsAnalyzing(false);
+        goBack();
         setAudioVisible(true);
       }
     }
@@ -112,15 +200,55 @@ export default function AlumnoPanel() {
 
   const formatTime = (seg: number) => `${Math.floor(seg / 60)}:${(seg % 60).toString().padStart(2, "0")}`;
 
-  const [retosRespuestas, setRetosRespuestas] = useState<Record<string, boolean | null>>({});
+  const [retosRespuestas, setRetosRespuestas] = useState<Record<string, { correct: boolean; timedOut: boolean }>>({});
 
-  const responder = (retoId: string, correcta: boolean) => {
-    setRetosRespuestas((prev) => ({ ...prev, [retoId]: correcta }));
+  const responder = (retoId: string, correct: boolean) => {
+    if (retosRespuestas[retoId]) return; // Already answered
+    setRetosRespuestas((prev) => ({ ...prev, [retoId]: { correct, timedOut: false } }));
+    setQuestionAnswered(true);
+    if (questionTimerRef.current) clearInterval(questionTimerRef.current);
+
+    // Auto advance after 1.5s
+    setTimeout(() => {
+      advanceQuestion();
+    }, 1500);
+  };
+
+  const handleTimeout = useCallback(() => {
+    if (!activeText?.challenges?.length) return;
+    const currentChallenge = activeText.challenges[currentQuestionIdx];
+    if (!currentChallenge) return;
+    if (retosRespuestas[currentChallenge.id]) return;
+
+    setRetosRespuestas((prev) => ({
+      ...prev,
+      [currentChallenge.id]: { correct: false, timedOut: true }
+    }));
+    setQuestionAnswered(true);
+
+    // Try to vibrate
+    if (navigator.vibrate) navigator.vibrate(200);
+
+    // Auto advance after 1.5s
+    setTimeout(() => {
+      advanceQuestion();
+    }, 1500);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeText, currentQuestionIdx, retosRespuestas]);
+
+  const advanceQuestion = () => {
+    if (!activeText?.challenges?.length) return;
+    if (currentQuestionIdx < activeText.challenges.length - 1) {
+      setCurrentQuestionIdx(prev => prev + 1);
+      setQuestionAnswered(false);
+    } else {
+      // All questions answered, finalize
+      finalizarRetos();
+    }
   };
 
   const finalizarRetos = async () => {
-    // Calcular puntaje
-    const correctCount = Object.values(retosRespuestas).filter(r => r === true).length;
+    const correctCount = Object.values(retosRespuestas).filter(r => r.correct).length;
     const totalChallenges = activeText.challenges.length;
     const challengesScore = totalChallenges > 0 ? Math.round((correctCount / totalChallenges) * 100) : 0;
     const aiScore = aiAnalysis?.score || 0;
@@ -139,16 +267,30 @@ export default function AlumnoPanel() {
       })
     });
 
-    // Recargar textos para actualizar la lista
+    // Recargar textos
     fetch('/api/alumno/texts').then(res => res.json()).then(data => { if (data.texts) setTexts(data.texts); });
 
     goTrofeo();
   };
 
   const retosPendientes = activeText?.challenges || [];
-  const todosRetosRespondidos = retosPendientes.length > 0 && retosPendientes.every((r: any) => retosRespuestas[r.id] !== undefined && retosRespuestas[r.id] !== null);
+  const currentReto = retosPendientes[currentQuestionIdx];
 
   const trofeosGanados = texts.filter(t => t.progress?.length > 0 && t.progress[0].status === "COMPLETADO").length;
+
+  // Timer visual helpers
+  const timerPercent = (questionTimer / TIMER_PER_QUESTION) * 100;
+  const timerColorClass = questionTimer > 15 ? 'safe' : questionTimer > 7 ? 'warning' : 'danger';
+
+  // Census metrics helpers
+  const ppm = aiAnalysis?.ppm || 0;
+  const prosody = aiAnalysis?.prosody || 1;
+  const performanceLevel = aiAnalysis?.performanceLevel || (ppm < 100 ? 'Crítico' : ppm <= 181 ? 'Medio' : 'Avanzado');
+  const correctAnswers = Object.values(retosRespuestas).filter(r => r.correct).length;
+  const totalQuestions = retosPendientes.length;
+  const comprehensionLevel = getComprehensionLevel(correctAnswers, totalQuestions);
+
+  const performanceLevelColor = performanceLevel === 'Avanzado' ? '#2e8b57' : performanceLevel === 'Medio' ? '#e8a020' : '#c0392b';
 
   return (
     <>
@@ -213,7 +355,7 @@ export default function AlumnoPanel() {
           </div>
         </div>
 
-        {/* TEXTO */}
+        {/* TEXTO - with real-time word tracking */}
         <div className={`screen ${currentScreen === "texto" ? "active" : ""}`} id="s-texto">
           {activeText && (
             <>
@@ -228,7 +370,41 @@ export default function AlumnoPanel() {
               </div>
 
               <div className="texto-body">
-                <div className="texto-contenido">{activeText.content}</div>
+                {/* Word legend */}
+                {grabando && (
+                  <div className="word-legend">
+                    <div className="word-legend-item"><div className="legend-dot green"></div> Correcto</div>
+                    <div className="word-legend-item"><div className="legend-dot orange"></div> A mejorar</div>
+                    <div className="word-legend-item"><div className="legend-dot red"></div> Incorrecto</div>
+                    <div className="word-legend-item"><div className="legend-dot gray"></div> Pendiente</div>
+                  </div>
+                )}
+
+                {/* Speech recognition badge */}
+                {grabando && (
+                  <div style={{ textAlign: 'center' }}>
+                    <div className={`speech-badge ${isListening ? 'listening' : 'off'}`}>
+                      {isListening ? '🎤 Escuchando tu voz...' : speechSupported ? '⏳ Iniciando...' : '⚠️ Sin reconocimiento en vivo'}
+                    </div>
+                  </div>
+                )}
+
+                {/* Text content with real-time word coloring */}
+                <div className="texto-contenido-live" ref={textContainerRef}>
+                  {wordMatches.length > 0 ? (
+                    wordMatches.map((match, idx) => (
+                      <span
+                        key={idx}
+                        className={`word word-${match.status}`}
+                        title={match.spokenAs ? `Dijiste: "${match.spokenAs}"` : undefined}
+                      >
+                        {match.word}{' '}
+                      </span>
+                    ))
+                  ) : (
+                    <span>{activeText.content}</span>
+                  )}
+                </div>
 
                 <div className="grabadora">
                   <div className="grab-titulo">🎙️ Leé este texto en voz alta</div>
@@ -257,64 +433,184 @@ export default function AlumnoPanel() {
           )}
         </div>
 
-        {/* RETOS */}
+        {/* RETOS - with timer and single question view */}
         <div className={`screen ${currentScreen === "retos" ? "active" : ""}`} id="s-retos">
           {activeText && (
             <>
               <div className="retos-header">
                 <h2>🎯 Retos de comprensión</h2>
-                <p>{activeText.title} · {activeText.challenges.length} retos</p>
+                <p>{activeText.title} · {totalQuestions} retos · ⏱️ {TIMER_PER_QUESTION}s por pregunta</p>
               </div>
-              <div className="retos-body">
-                {activeText.challenges.map((reto: any, index: number) => {
-                  const opciones = JSON.parse(reto.options);
-                  return (
-                    <div key={reto.id} className="reto-card">
-                      <div className="rc-num">Reto {index + 1} de {activeText.challenges.length}</div>
-                      <div className="rc-pregunta">{reto.question}</div>
+
+              <div className="retos-single-view">
+                {/* Progress dots */}
+                <div className="question-progress">
+                  {retosPendientes.map((_: any, idx: number) => {
+                    const retoId = retosPendientes[idx]?.id;
+                    const answer = retosRespuestas[retoId];
+                    let dotClass = '';
+                    if (idx === currentQuestionIdx) dotClass = 'active';
+                    else if (answer?.correct) dotClass = 'answered';
+                    else if (answer?.timedOut) dotClass = 'timeout';
+                    else if (answer && !answer.correct) dotClass = 'wrong';
+                    return <div key={idx} className={`q-dot ${dotClass}`}></div>;
+                  })}
+                </div>
+
+                {/* Timer */}
+                {currentReto && !retosRespuestas[currentReto.id] && (
+                  <div className="timer-container">
+                    <div className="timer-header">
+                      <div className="timer-label">Tiempo restante</div>
+                      <div className={`timer-seconds ${timerColorClass}`}>
+                        {questionTimer}s
+                      </div>
+                    </div>
+                    <div className="timer-bar">
+                      <div
+                        className={`timer-bar-fill ${timerColorClass}`}
+                        style={{ width: `${timerPercent}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Current question */}
+                {currentReto && (
+                  <div className="reto-card-single" key={`q-${currentQuestionIdx}`}>
+                    <div className="rc-num">Pregunta {currentQuestionIdx + 1} de {totalQuestions}</div>
+                    <div className="rc-pregunta">{currentReto.question}</div>
+                    
+                    {retosRespuestas[currentReto.id]?.timedOut ? (
+                      <div className="reto-timeout-overlay">
+                        <div className="timeout-icon">⏰</div>
+                        <div className="timeout-msg">¡Se acabó el tiempo!</div>
+                      </div>
+                    ) : (
                       <div className="opciones">
-                        {opciones.map((opc: string, idx: number) => {
-                          const isSelectedAndCorrect = retosRespuestas[reto.id] === true && idx === reto.correctIdx;
-                          const isSelectedAndWrong = retosRespuestas[reto.id] === false && idx !== reto.correctIdx;
+                        {JSON.parse(currentReto.options).map((opc: string, idx: number) => {
+                          const answer = retosRespuestas[currentReto.id];
+                          let className = 'opcion';
+                          if (answer) {
+                            if (idx === currentReto.correctIdx) className += ' correcta';
+                            else if (!answer.correct && idx !== currentReto.correctIdx) className += ' incorrecta';
+                          }
                           return (
-                            <div 
-                              key={idx} 
-                              className={`opcion ${isSelectedAndCorrect ? "correcta" : isSelectedAndWrong ? "incorrecta" : ""}`}
+                            <div
+                              key={idx}
+                              className={className}
                               onClick={() => {
-                                if (retosRespuestas[reto.id] === undefined || retosRespuestas[reto.id] === null) {
-                                  responder(reto.id, idx === reto.correctIdx);
+                                if (!retosRespuestas[currentReto.id]) {
+                                  responder(currentReto.id, idx === currentReto.correctIdx);
                                 }
                               }}
                             >
                               {opc}
                             </div>
-                          )
+                          );
                         })}
                       </div>
-                    </div>
-                  );
-                })}
-
-                {todosRetosRespondidos && (
-                  <button className="btn-enviar" onClick={finalizarRetos} style={{ marginTop: 20 }}>
-                    Finalizar y ver puntuación 🏆
-                  </button>
+                    )}
+                  </div>
                 )}
               </div>
             </>
           )}
         </div>
 
-        {/* TROFEO */}
+        {/* TROFEO - with census metrics */}
         <div className={`screen ${currentScreen === "trofeo" ? "active" : ""}`} id="s-trofeo" style={{ display: currentScreen === "trofeo" ? "flex" : "none" }}>
-          <div className="trofeo-anim">🏆</div>
-          <div className="trofeo-titulo">¡Texto Completado!</div>
-          <div className="trofeo-desc">Gracias a tu lectura ({aiAnalysis?.score || 0} pts) y tus respuestas, sumaste una gran puntuación.</div>
-          <div className="trofeo-puntos">
-            <div className="pts-num">+{scoreTotal}</div>
-            <div className="pts-lbl">puntos totales</div>
-          </div>
-          <button className="btn-continuar" onClick={goHome}>Volver al Inicio →</button>
+          {isAnalyzing ? (
+            <div className="analysis-loading">
+              <div className="analysis-spinner"></div>
+              <div className="analysis-loading-text">
+                🤖 El Profe Robot está analizando<br/>tu lectura...
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="trofeo-anim">🏆</div>
+              <div className="trofeo-titulo">¡Texto Completado!</div>
+              <div className="trofeo-desc">
+                {aiAnalysis?.feedback || 'Gracias a tu lectura y tus respuestas, sumaste una gran puntuación.'}
+              </div>
+
+              {/* Census metrics */}
+              <div className="census-results">
+                <div className="census-card">
+                  <div className="census-label">Palabras por Minuto</div>
+                  <div className="census-value">{ppm}</div>
+                  <div className="census-level-badge" style={{ background: `${performanceLevelColor}30`, color: performanceLevelColor }}>
+                    {performanceLevel}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <div className="census-card" style={{ flex: 1 }}>
+                    <div className="census-label">Prosodia</div>
+                    <div className="prosody-stars">
+                      {[1, 2, 3].map(n => (
+                        <span key={n}>{n <= prosody ? '⭐' : '☆'}</span>
+                      ))}
+                    </div>
+                    <div className="census-sublabel">
+                      {prosody === 3 ? 'Alta' : prosody === 2 ? 'Media' : 'Baja'}
+                    </div>
+                  </div>
+
+                  <div className="census-card" style={{ flex: 1 }}>
+                    <div className="census-label">Comprensión</div>
+                    <div className="census-value" style={{ fontSize: '20px' }}>
+                      {correctAnswers}/{totalQuestions}
+                    </div>
+                    <div className="census-level-badge" style={{ background: `${comprehensionLevel.color}30`, color: comprehensionLevel.color }}>
+                      {comprehensionLevel.level}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="census-card">
+                  <div className="census-label">Fluidez (IA)</div>
+                  <div className="census-value">{aiAnalysis?.score || 0}<span style={{ fontSize: '14px', color: '#a8d4f5' }}>/100</span></div>
+                </div>
+
+                {/* Word analysis summary */}
+                {aiAnalysis && (
+                  <div className="census-card">
+                    <div className="census-label">Detalle de lectura</div>
+                    <div className="word-analysis-summary">
+                      {aiAnalysis.omittedWords?.length > 0 && (
+                        <div className="was-item wrong">
+                          {aiAnalysis.omittedWords.length} omitidas
+                        </div>
+                      )}
+                      {aiAnalysis.substitutedWords?.length > 0 && (
+                        <div className="was-item close">
+                          {aiAnalysis.substitutedWords.length} sustituidas
+                        </div>
+                      )}
+                      {aiAnalysis.inventedWords?.length > 0 && (
+                        <div className="was-item wrong">
+                          {aiAnalysis.inventedWords.length} inventadas
+                        </div>
+                      )}
+                      {aiAnalysis.selfCorrectedWords?.length > 0 && (
+                        <div className="was-item correct">
+                          {aiAnalysis.selfCorrectedWords.length} autocorregidas ✓
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="trofeo-puntos">
+                <div className="pts-num">+{scoreTotal}</div>
+                <div className="pts-lbl">puntos totales</div>
+              </div>
+              <button className="btn-continuar" onClick={goHome}>Volver al Inicio →</button>
+            </>
+          )}
         </div>
 
       </div>
