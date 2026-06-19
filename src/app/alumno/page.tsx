@@ -580,7 +580,7 @@ export default function AlumnoPanel() {
             <div className="trofeo-emoji">🏆</div>
             <div className="trofeo-titulo">¡Texto completado!</div>
             <div className="trofeo-sub">Sumaste {scoreTotal} puntos a tu cuenta.</div>
-            <button className="btn-volver" onClick={goStats}>Ver mis resultados →</button>
+            <button className="btn-continuar" onClick={goStats} style={{ marginTop: 24, boxShadow: '0 4px 15px rgba(0,0,0,0.15)' }}>Ver mis resultados →</button>
           </div>
         </div>
 
@@ -607,7 +607,7 @@ export default function AlumnoPanel() {
                 <div className="sb-val" style={{ color: '#2563eb' }}>{ppm}</div>
               </div>
               <div className="stat-box">
-                <div className="sb-label">Prosodia</div>
+                <div className="sb-label">Pronunciación</div>
                 <div className="sb-val" style={{ color: '#8b5cf6', fontSize: 24 }}>
                   {"⭐".repeat(prosody)}{"☆".repeat(3 - prosody)}
                 </div>
@@ -653,7 +653,7 @@ export default function AlumnoPanel() {
               <div className="sf-text">{aiAnalysis?.feedback || "¡Excelente trabajo! Seguí practicando así."}</div>
             </div>
 
-            <button className="btn-volver" onClick={() => setScreenHistory(["home"])}>Volver al inicio</button>
+            <button className="btn-primary" onClick={() => setScreenHistory(["home"])} style={{ marginTop: 20 }}>Volver al inicio</button>
           </div>
         </div>
       </div>
