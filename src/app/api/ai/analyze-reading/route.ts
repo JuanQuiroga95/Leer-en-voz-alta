@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     let resultString = '';
     try {
       const completion = await groq.chat.completions.create({
-        model: 'llama-3.1-8b-instant', // Modelo Llama 3.1 actualizado en Groq
+        model: 'llama-3.3-70b-versatile', // Modelo más grande y capaz para formateo JSON complejo
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -94,7 +94,7 @@ REGLAS DE EVALUACIÓN (basadas en el Censo de Fluidez de Mendoza):
           },
           {
             role: 'user',
-            content: `Texto original (${totalWords} palabras):\n${referenceText}\n\nTranscripción del alumno:\n${transcriptText}\n\nTiempo de lectura: ${timeSeconds} segundos\nTotal de palabras del texto: ${totalWords}`
+            content: `Texto original (${totalWords} palabras):\n${referenceText}\n\nTranscripción del alumno:\n${transcriptText}\n\nTiempo de lectura: ${timeSeconds} segundos\nTotal de palabras del texto: ${totalWords}\n\nIMPORTANTE: Tu respuesta debe ser ÚNICAMENTE un objeto JSON válido, sin ningún otro texto de introducción o cierre.`
           }
         ]
       });
