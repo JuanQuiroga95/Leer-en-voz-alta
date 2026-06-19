@@ -76,14 +76,16 @@ export function tokenizeText(text: string): string[] {
 /**
  * Compara las palabras habladas contra las de referencia y devuelve un array con el estado de cada palabra.
  * 
- * Algoritmo: avanza secuencialmente por las palabras de referencia.
- * Para cada palabra hablada, busca la mejor coincidencia en una ventana de ±3 palabras
- * alrededor de la posición esperada para tolerar omisiones y repeticiones.
+ * Algoritmo simplificado y robusto:
+ * - Avanza secuencialmente por las palabras de referencia.
+ * - Para cada palabra hablada, busca la mejor coincidencia en una ventana adelante.
+ * - NO marca palabras como "wrong" en tiempo real (solo correct/close/pending/current).
+ *   Las omisiones solo se detectan al final cuando se detiene la grabación.
  */
 export function matchWords(
   referenceWords: string[],
   spokenWords: string[],
-  currentWordIndex?: number
+  currentSpokenCount?: number
 ): WordMatch[] {
   const results: WordMatch[] = referenceWords.map(word => ({
     word,
@@ -91,77 +93,54 @@ export function matchWords(
   }));
 
   if (spokenWords.length === 0) {
-    if (currentWordIndex !== undefined && currentWordIndex < results.length) {
-      results[currentWordIndex].status = 'current';
+    // Marcar la primera palabra como current si no hay nada hablado todavía
+    if (results.length > 0) {
+      results[0].status = 'current';
     }
     return results;
   }
 
   let refPointer = 0;
-  const WINDOW = 2; // Reducido a 2 para evitar saltos agresivos
+  const WINDOW = 3; // Ventana de búsqueda hacia adelante
 
   for (let s = 0; s < spokenWords.length; s++) {
     const spoken = spokenWords[s];
     let bestMatch = -1;
     let bestSim = 0;
 
-    // Buscar en una ventana alrededor del pointer actual
-    const searchStart = Math.max(0, refPointer - 1); // Permitir buscar 1 atrás por si repitió
+    // Buscar solo hacia adelante desde el pointer actual (no retroceder)
     const searchEnd = Math.min(referenceWords.length - 1, refPointer + WINDOW);
 
-    for (let r = searchStart; r <= searchEnd; r++) {
+    for (let r = refPointer; r <= searchEnd; r++) {
       if (results[r].status === 'correct') continue;
       
       const sim = similarity(referenceWords[r], spoken);
-      // Penalizar saltos grandes para palabras cortas (ej: "el", "la", "de")
-      const isShortWord = normalizeWord(referenceWords[r]).length <= 3;
-      const isJump = r > refPointer;
-      
-      let effectiveSim = sim;
-      if (isJump && isShortWord && sim < 1) {
-        effectiveSim -= 0.3; // Mucha penalización si es corta y no es exacta
-      } else if (isJump && isShortWord && sim === 1) {
-        effectiveSim -= 0.1; // Leve penalización para evitar saltar a un "de" lejano
-      }
-
-      if (effectiveSim > bestSim) {
-        bestSim = effectiveSim;
+      if (sim > bestSim) {
+        bestSim = sim;
         bestMatch = r;
       }
     }
 
-    if (bestMatch >= 0) {
-      if (bestSim >= 0.85) {
+    if (bestMatch >= 0 && bestSim >= 0.5) {
+      if (bestSim >= 0.8) {
         results[bestMatch].status = 'correct';
         results[bestMatch].spokenAs = spoken;
-      } else if (bestSim >= 0.5) {
+      } else {
         results[bestMatch].status = 'close';
         results[bestMatch].spokenAs = spoken;
-      } else {
-        // Ignorar si la similitud es muy baja (ruido o error)
-        continue;
       }
 
-      // Marcar las palabras omitidas entre el pointer y el match
-      // Pero SOLO si avanzamos (bestMatch >= refPointer)
-      if (bestMatch >= refPointer) {
-        for (let skip = refPointer; skip < bestMatch; skip++) {
-          if (results[skip].status === 'pending') {
-            results[skip].status = 'wrong';
-          }
-        }
-        refPointer = bestMatch + 1;
-      } else if (bestMatch === searchStart) {
-        // Se corrigió a sí mismo repitiendo una palabra anterior, no avanzamos el pointer
-        refPointer = Math.max(refPointer, bestMatch + 1);
-      }
+      // Avanzar el pointer al siguiente después del match
+      refPointer = bestMatch + 1;
     }
+    // Si no hay match razonable, simplemente ignoramos esa palabra hablada (ruido, repetición, etc.)
   }
 
-  // Marcar la palabra actual (donde va el lector)
-  if (currentWordIndex !== undefined && currentWordIndex < results.length) {
-    if (results[currentWordIndex].status === 'pending') {
-      results[currentWordIndex].status = 'current';
+  // Marcar la palabra "current" (la siguiente pendiente después del último match)
+  for (let i = refPointer; i < results.length; i++) {
+    if (results[i].status === 'pending') {
+      results[i].status = 'current';
+      break;
     }
   }
 

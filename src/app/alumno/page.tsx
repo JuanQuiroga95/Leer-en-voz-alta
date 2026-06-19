@@ -83,15 +83,14 @@ export default function AlumnoPanel() {
   useEffect(() => {
     if (!activeText || !grabando) return;
     const referenceWords = tokenizeText(activeText.content);
-    const currentIdx = allWords.length;
-    const matches = matchWords(referenceWords, allWords, currentIdx);
+    const matches = matchWords(referenceWords, allWords);
     setWordMatches(matches);
 
     // Auto-scroll to current word
     if (textContainerRef.current) {
-      const activeWord = textContainerRef.current.querySelector('.word-pending');
-      if (activeWord) {
-        activeWord.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const currentWord = textContainerRef.current.querySelector('.word-current');
+      if (currentWord) {
+        currentWord.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }, [allWords, activeText, grabando]);

@@ -54,6 +54,7 @@ export function useSpeechRecognition() {
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const finalTranscriptRef = useRef('');
   const shouldRestartRef = useRef(false);
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -72,7 +73,13 @@ export function useSpeechRecognition() {
     // Limpiar instancia anterior
     if (recognitionRef.current) {
       recognitionRef.current.onend = null;
-      recognitionRef.current.abort();
+      recognitionRef.current.onresult = null;
+      recognitionRef.current.onerror = null;
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
+    }
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
     }
 
     const recognition = new SpeechRecognition();
@@ -110,35 +117,29 @@ export function useSpeechRecognition() {
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.warn('Speech recognition error:', event.error);
-      if (event.error === 'no-speech') {
-        // No pasa nada, se reinicia solo en onend
-        return;
-      }
-      if (event.error === 'aborted') {
-        return;
-      }
-      // En otros errores, intentar reiniciar con un delay si sigue activo
-      if (shouldRestartRef.current) {
-        setTimeout(() => {
-          if (shouldRestartRef.current && recognitionRef.current) {
-            try { recognition.start(); } catch { /* ignore */ }
-          }
-        }, 500);
-      }
+      // 'no-speech' y 'aborted' son normales, los ignoramos.
+      // El onend se encarga de reiniciar.
     };
 
     recognition.onend = () => {
-      // El reconocimiento se detiene periódicamente (silencio o límite). Reiniciamos si debe seguir grabando.
+      // Chrome detiene la escucha periódicamente (cada ~30s de silencio o al límite del audio).
+      // Reiniciamos automáticamente si debemos seguir escuchando.
       if (shouldRestartRef.current) {
-        setTimeout(() => {
-          if (shouldRestartRef.current && recognitionRef.current) {
+        restartTimeoutRef.current = setTimeout(() => {
+          if (shouldRestartRef.current && recognitionRef.current === recognition) {
             try {
               recognition.start();
             } catch (err) {
-              console.warn("Failed to restart speech recognition", err);
+              console.warn("No se pudo reiniciar speech recognition:", err);
+              // Intentar una última vez con delay más largo
+              restartTimeoutRef.current = setTimeout(() => {
+                if (shouldRestartRef.current) {
+                  try { recognition.start(); } catch { /* give up */ }
+                }
+              }, 1000);
             }
           }
-        }, 300); // Pequeño delay de 300ms ayuda a evitar errores de colisión en Chrome
+        }, 200);
       } else {
         setIsListening(false);
       }
@@ -161,18 +162,28 @@ export function useSpeechRecognition() {
 
   const stopListening = useCallback(() => {
     shouldRestartRef.current = false;
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     if (recognitionRef.current) {
       recognitionRef.current.onend = () => setIsListening(false);
-      recognitionRef.current.stop();
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
     }
     setIsListening(false);
   }, []);
 
   const resetRecognition = useCallback(() => {
     shouldRestartRef.current = false;
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     if (recognitionRef.current) {
       recognitionRef.current.onend = null;
-      recognitionRef.current.abort();
+      recognitionRef.current.onresult = null;
+      recognitionRef.current.onerror = null;
+      try { recognitionRef.current.abort(); } catch { /* ignore */ }
     }
     recognitionRef.current = null;
     finalTranscriptRef.current = '';
