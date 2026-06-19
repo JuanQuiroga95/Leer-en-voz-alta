@@ -141,7 +141,16 @@ export default function AlumnoPanel() {
         body: formData,
       });
       
-      if (!response.ok) throw new Error('Error en el análisis');
+      if (!response.ok) {
+        let errStr = 'Error desconocido';
+        try {
+          const errData = await response.json();
+          errStr = errData.error || errStr;
+        } catch (e) {
+          errStr = `Error HTTP ${response.status} - Timeout o falla de Vercel`;
+        }
+        throw new Error(errStr);
+      }
       
       const data = await response.json();
       setAiAnalysis(data.analysis);
@@ -150,9 +159,9 @@ export default function AlumnoPanel() {
       navigateTo("retos");
       // Start the timer for the first question
       startQuestionTimer();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Hubo un error al analizar el audio.');
+      alert(`Hubo un error al analizar el audio.\n\nDetalle técnico: ${error.message}\n\nAsegurate de haber recargado la página con Ctrl+Shift+R.`);
     } finally {
       setIsAnalyzing(false);
     }
