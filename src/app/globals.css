@@ -439,17 +439,15 @@ body {
 }
 
 .word-close {
-  color: #b06000;
-  background: rgba(232, 160, 32, 0.15);
-  border-bottom: 2px solid #e8a020;
+  color: #92700a;
+  background: rgba(250, 204, 21, 0.2);
+  border-bottom: 2px solid #facc15;
 }
 
 .word-wrong {
-  color: #b02020;
-  background: rgba(192, 57, 43, 0.1);
-  border-bottom: 2px solid #c0392b;
-  text-decoration: line-through;
-  text-decoration-color: rgba(192, 57, 43, 0.4);
+  color: #92700a;
+  background: rgba(250, 204, 21, 0.15);
+  border-bottom: 2px dashed #e8a020;
 }
 
 .word-legend {
