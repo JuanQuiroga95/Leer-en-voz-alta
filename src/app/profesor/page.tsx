@@ -129,13 +129,40 @@ export default function ProfesorPanel() {
   };
 
   const resetProgress = async (progressId: string) => {
-    if (confirm("¿Estás seguro que querés borrar este registro? El alumno tendrá que leer el texto de nuevo.")) {
-      await fetch("/api/profesor/reset-progress", {
+    if (!confirm("¿Estás seguro que querés borrar este registro? El alumno tendrá que leer el texto de nuevo.")) return;
+    try {
+      const res = await fetch("/api/profesor/reset-progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ progressId }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Error al reiniciar el progreso.");
+        return;
+      }
+      alert("✅ Lectura reiniciada correctamente.");
       fetchDashboard();
+    } catch (e) {
+      alert("Error de red al intentar reiniciar.");
+    }
+  };
+
+  const saveTeacherFeedback = async (progressId: string, feedback: string, grade: string) => {
+    try {
+      const res = await fetch("/api/profesor/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ progressId, feedback, grade: grade ? parseInt(grade, 10) : undefined }),
+      });
+      if (!res.ok) {
+        alert("Error al guardar la devolución.");
+        return;
+      }
+      alert("✅ Devolución guardada correctamente.");
+      fetchDashboard();
+    } catch (e) {
+      alert("Error de red.");
     }
   };
 
@@ -635,6 +662,47 @@ export default function ProfesorPanel() {
                             {p.aiAnalysis?.selfCorrectedWords?.length > 0 && (
                               <div style={{ fontSize: 12, color: "#6ee7b7", background: "rgba(16,185,129,0.1)", padding: "4px 10px", borderRadius: 8 }}><strong>{p.aiAnalysis.selfCorrectedWords.length}</strong> autocorregidas ✓</div>
                             )}
+                          </div>
+
+                          {/* ── Devolución del Profesor ── */}
+                          <div style={{ background: "rgba(16, 185, 129, 0.06)", padding: 14, borderRadius: 10, marginBottom: 12, border: "1px solid rgba(16,185,129,0.15)" }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "#34d399", marginBottom: 8, textTransform: "uppercase" }}>✏️ Mi Devolución</div>
+                            {p.feedback && (
+                              <div style={{ fontSize: 13, color: "#a7f3d0", marginBottom: 8, padding: "8px 10px", background: "rgba(16,185,129,0.1)", borderRadius: 8, lineHeight: 1.5 }}>
+                                <strong>Nota: {p.grade ?? "—"}/10</strong> — {p.feedback}
+                              </div>
+                            )}
+                            <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                              <div style={{ width: 70 }}>
+                                <label style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>Nota /10</label>
+                                <input
+                                  type="number" min="1" max="10"
+                                  defaultValue={p.grade || ""}
+                                  id={`grade-${p.id}`}
+                                  style={{ width: "100%", padding: "6px 8px", borderRadius: 6, background: "rgba(15,23,42,0.5)", border: "1px solid rgba(148,163,184,0.2)", color: "#f1f5f9", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                                />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <label style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>Devolución</label>
+                                <input
+                                  type="text"
+                                  defaultValue={p.feedback || ""}
+                                  id={`feedback-${p.id}`}
+                                  placeholder="Ej: Muy bien, mejorar entonación en preguntas"
+                                  style={{ width: "100%", padding: "6px 10px", borderRadius: 6, background: "rgba(15,23,42,0.5)", border: "1px solid rgba(148,163,184,0.2)", color: "#f1f5f9", fontSize: 13, outline: "none", fontFamily: "inherit" }}
+                                />
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const gradeEl = document.getElementById(`grade-${p.id}`) as HTMLInputElement;
+                                  const feedbackEl = document.getElementById(`feedback-${p.id}`) as HTMLInputElement;
+                                  saveTeacherFeedback(p.id, feedbackEl?.value || "", gradeEl?.value || "");
+                                }}
+                                style={{ padding: "6px 14px", background: "rgba(16,185,129,0.2)", color: "#34d399", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 12, whiteSpace: "nowrap", fontFamily: "inherit" }}
+                              >
+                                💾 Guardar
+                              </button>
+                            </div>
                           </div>
 
                           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
