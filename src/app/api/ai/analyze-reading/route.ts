@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
+import { fileNameForMimeType } from '@/lib/audioFormat';
+
+// Transcribir + analizar una lectura completa puede pasarse del limite por defecto
+// de Vercel; sin esto las lecturas largas fallan con un 504 y el alumno no ve correcciones.
+export const maxDuration = 120;
 
 // Lazy init para evitar error de build cuando no hay GROQ_API_KEY
 function getGroqClient() {
@@ -33,7 +38,9 @@ export async function POST(request: Request) {
     const totalWords = referenceText.split(/\s+/).filter(w => w.length > 0).length;
 
     const buffer = await audioFile.arrayBuffer();
-    const fileForGroq = await toFile(Buffer.from(buffer), 'audio.webm', { type: audioFile.type || 'audio/webm' });
+    // La extension debe coincidir con el formato real: Android graba webm, iPhone m4a.
+    const audioMimeType = audioFile.type || 'audio/webm';
+    const fileForGroq = await toFile(Buffer.from(buffer), fileNameForMimeType('audio', audioMimeType), { type: audioMimeType });
 
     // 1. Transcribe audio with Whisper (en Groq)
     let transcriptText = '';
@@ -148,8 +155,8 @@ REGLAS DE EVALUACIÓN (basadas en el Censo de Fluidez de Mendoza):
     try {
       if (process.env.BLOB_READ_WRITE_TOKEN) {
         const { put } = await import('@vercel/blob');
-        const blobName = `audio_${Date.now()}.webm`;
-        const blobResult = await put(blobName, buffer, { access: 'public', contentType: 'audio/webm' });
+        const blobName = fileNameForMimeType(`audio_${Date.now()}`, audioMimeType);
+        const blobResult = await put(blobName, buffer, { access: 'public', contentType: audioMimeType });
         audioUrl = blobResult.url;
       } else {
         console.warn("BLOB_READ_WRITE_TOKEN no está configurado. Se omite la subida del audio.");

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAudioRecorder } from "@/lib/useAudioRecorder";
-import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { fileNameForMimeType } from "@/lib/audioFormat";
 import { tokenizeText, matchWords, calculatePPM, getPerformanceLevel, getComprehensionLevel } from "@/lib/textMatcher";
 import type { WordMatch } from "@/lib/textMatcher";
 import { useRouter } from "next/navigation";
@@ -40,8 +40,17 @@ export default function AlumnoPanel() {
   const [questionAnswered, setQuestionAnswered] = useState(false);
   const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { isRecording, audioBlob, audioUrl, startRecording, stopRecording, resetRecording: resetAudio } = useAudioRecorder();
-  const { isListening, isSupported: speechSupported, allWords, startListening, stopListening, resetRecognition } = useSpeechRecognition();
+  const {
+    isRecording,
+    audioBlob,
+    audioUrl,
+    audioMimeType,
+    liveStatus,
+    liveWords,
+    startRecording,
+    stopRecording,
+    resetRecording: resetAudio,
+  } = useAudioRecorder();
   const router = useRouter();
   
   const currentScreen = screenHistory[screenHistory.length - 1];
@@ -83,7 +92,7 @@ export default function AlumnoPanel() {
   useEffect(() => {
     if (!activeText || !grabando) return;
     const referenceWords = tokenizeText(activeText.content);
-    const matches = matchWords(referenceWords, allWords);
+    const matches = matchWords(referenceWords, liveWords);
     setWordMatches(matches);
 
     // Auto-scroll to current word
@@ -93,7 +102,7 @@ export default function AlumnoPanel() {
         currentWord.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [allWords, activeText, grabando]);
+  }, [liveWords, activeText, grabando]);
 
   const goBack = () => {
     setScreenHistory(prev => {
@@ -110,7 +119,7 @@ export default function AlumnoPanel() {
   const goTexto = (t: any) => {
     setActiveText(t);
     setWordMatches([]);
-    resetRecognition();
+    resetAudio();
     navigateTo("texto");
   };
 
@@ -121,7 +130,7 @@ export default function AlumnoPanel() {
     try {
       const formData = new FormData();
       if (audioBlob) {
-        formData.append('audio', audioBlob, 'lectura.webm');
+        formData.append('audio', audioBlob, fileNameForMimeType('lectura', audioMimeType || audioBlob.type));
       }
       formData.append('textId', activeText.id);
       formData.append('referenceText', activeText.content);
@@ -217,8 +226,7 @@ export default function AlumnoPanel() {
       setGrabSeg(0);
       setGrabando(true);
       setWordMatches([]);
-      startRecording();
-      startListening();
+      startRecording({ referenceText: activeText.content });
       
       grabTimerRef.current = setInterval(() => {
         setGrabSeg(s => s + 1);
@@ -226,7 +234,6 @@ export default function AlumnoPanel() {
     } else {
       setGrabando(false);
       stopRecording();
-      stopListening();
       if (grabTimerRef.current) clearInterval(grabTimerRef.current);
       setTimeout(() => setAudioVisible(true), 500);
     }
@@ -234,7 +241,6 @@ export default function AlumnoPanel() {
 
   const resetGrabacion = () => {
     resetAudio();
-    resetRecognition();
     setAudioVisible(false);
     setGrabSeg(0);
     setWordMatches([]);
@@ -456,8 +462,12 @@ export default function AlumnoPanel() {
                 {/* Speech recognition badge */}
                 {grabando && (
                   <div style={{ textAlign: 'center' }}>
-                    <div className={`speech-badge ${isListening ? 'listening' : 'off'}`}>
-                      {isListening ? '🎤 Escuchando tu voz...' : speechSupported ? '⏳ Iniciando...' : '⚠️ Sin reconocimiento en vivo'}
+                    <div className={`speech-badge ${liveStatus === 'active' ? 'listening' : 'off'}`}>
+                      {liveStatus === 'active'
+                        ? '🎤 Te estoy siguiendo mientras leés…'
+                        : liveStatus === 'error'
+                          ? '⚠️ No se pudo acceder al micrófono'
+                          : '⏳ Preparando el seguimiento…'}
                     </div>
                   </div>
                 )}
