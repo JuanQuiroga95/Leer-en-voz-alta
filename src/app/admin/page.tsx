@@ -15,6 +15,7 @@ export default function AdminPanel() {
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({ name: '', legajo: '', division: '', role: 'ALUMNO', password: '' });
   const [uploadingCSV, setUploadingCSV] = useState(false);
+  const [seedingCenso, setSeedingCenso] = useState<string | null>(null);
 
   const fetchData = () => {
     fetch('/api/admin/users')
@@ -157,6 +158,29 @@ export default function AdminPanel() {
     reader.readAsText(file);
   };
 
+  const handleSeedTextos = async (set: string, nombre: string) => {
+    if (!confirm(`Se van a cargar los textos de "${nombre}" y quedarán disponibles en la pestaña Práctica de cada curso. ¿Continuar?`)) return;
+
+    setSeedingCenso(set);
+    try {
+      const res = await fetch('/api/admin/seed-censo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ set }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.mensaje);
+      } else {
+        alert(data.error || 'Error al cargar los textos');
+      }
+    } catch (e) {
+      alert('Error de conexión');
+    } finally {
+      setSeedingCenso(null);
+    }
+  };
+
   return (
     <div className="panel-page">
       <div className="panel-shell">
@@ -226,6 +250,30 @@ export default function AdminPanel() {
             </section>
           </div>
         )}
+
+        <section className="panel-card">
+          <div className="panel-toolbar">
+            <div>
+              <h2>Biblioteca de Textos</h2>
+              <p style={{ margin: '6px 0 0 0', color: '#718096', fontSize: '14px' }}>
+                Colecciones listas para cargar. Se agregan a la pestaña Práctica del año que corresponde y no se duplican si ya estaban.
+              </p>
+            </div>
+            <div className="panel-toolbar-actions">
+              {[
+                { set: 'censo2023', nombre: 'Censo de Fluidez Lectora 2023', etiqueta: '📚 Censo 2023 (5 textos)' },
+                { set: 'videla', nombre: 'Fluidez Lectora Videla', etiqueta: '📖 Fluidez Videla (10 textos)' },
+              ].map(({ set, nombre, etiqueta }) => {
+                const cargando = seedingCenso === set;
+                return (
+                  <button key={set} onClick={() => handleSeedTextos(set, nombre)} disabled={seedingCenso !== null} style={{ padding: '10px 24px', background: seedingCenso !== null ? '#a0aec0' : 'linear-gradient(135deg, #38a169 0%, #2f855a 100%)', color: 'white', border: 'none', borderRadius: '12px', cursor: seedingCenso !== null ? 'wait' : 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(47, 133, 90, 0.3)' }}>
+                    {cargando ? 'Cargando textos...' : etiqueta}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
 
         <section className="panel-card panel-card-lg">
           <div className="panel-toolbar">
