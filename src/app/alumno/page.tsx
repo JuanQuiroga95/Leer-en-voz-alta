@@ -46,6 +46,7 @@ export default function AlumnoPanel() {
     audioUrl,
     audioMimeType,
     liveStatus,
+    liveFuente,
     liveWords,
     startRecording,
     stopRecording,
@@ -464,7 +465,9 @@ export default function AlumnoPanel() {
                   <div style={{ textAlign: 'center' }}>
                     <div className={`speech-badge ${liveStatus === 'active' ? 'listening' : 'off'}`}>
                       {liveStatus === 'active'
-                        ? '🎤 Te estoy siguiendo mientras leés…'
+                        ? liveFuente === 'local'
+                          ? '⚡ Te estoy siguiendo al instante…'
+                          : '🎤 Te estoy siguiendo mientras leés…'
                         : liveStatus === 'error'
                           ? '⚠️ No se pudo acceder al micrófono'
                           : '⏳ Preparando el seguimiento…'}

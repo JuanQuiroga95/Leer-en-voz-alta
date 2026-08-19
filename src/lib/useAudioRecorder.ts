@@ -23,6 +23,11 @@ const PALABRAS_POR_SEGUNDO = 5;
 /** Ciclos que esperamos tras un 429 de Groq antes de volver a pedir. */
 const CICLOS_ESPERA_429 = 4;
 /**
+ * Tope de reinicios del reconocedor local. Se corta solo tras cada silencio largo y
+ * lo reactivamos, pero si falla siempre este tope evita un bucle cerrado de reintentos.
+ */
+const MAX_REINICIOS_LOCAL = 60;
+/**
  * Tope de audio acumulado que seguimos mandando en el modo de respaldo (~3 MB).
  * Vercel corta los request bodies alrededor de 4,5 MB; pasado ese punto dejamos de
  * seguir en vivo, pero la grabación continúa normal y el análisis final no se ve afectado.
@@ -30,6 +35,9 @@ const CICLOS_ESPERA_429 = 4;
 const LIVE_MAX_BYTES = 3 * 1024 * 1024;
 
 export type LiveStatus = 'idle' | 'starting' | 'active' | 'error';
+
+/** De dónde salen las palabras que se están resaltando ahora mismo. */
+export type LiveFuente = 'ninguna' | 'local' | 'servidor';
 
 export interface StartRecordingOptions {
   /** Si se pasa, se transcribe en vivo para ir resaltando el texto mientras se lee. */
@@ -42,16 +50,63 @@ function soportaVentana(mimeType: string): boolean {
   return base === 'audio/webm' || base === 'audio/ogg';
 }
 
+// --- Reconocimiento local del navegador (Web Speech API) ---
+// TypeScript no trae estos tipos; declaramos lo mínimo que usamos.
+
+interface ResultadoReconocimiento {
+  readonly isFinal: boolean;
+  readonly length: number;
+  [i: number]: { readonly transcript: string };
+}
+interface EventoReconocimiento extends Event {
+  readonly resultIndex: number;
+  readonly results: { readonly length: number; [i: number]: ResultadoReconocimiento };
+}
+interface Reconocedor extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((e: EventoReconocimiento) => void) | null;
+  onerror: ((e: Event & { error?: string }) => void) | null;
+  onend: (() => void) | null;
+}
+type ConstructorReconocedor = new () => Reconocedor;
+
+function obtenerReconocedor(): ConstructorReconocedor | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    SpeechRecognition?: ConstructorReconocedor;
+    webkitSpeechRecognition?: ConstructorReconocedor;
+  };
+  return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+}
+
 /**
  * Graba el audio de la lectura y, en paralelo, lo va transcribiendo para poder
  * resaltar las palabras en tiempo real.
  *
- * IMPORTANTE — por qué no se usa la Web Speech API:
- * abrir `webkitSpeechRecognition` a la vez que `MediaRecorder` funciona en Chrome
- * de escritorio pero NO en Chrome de Android, donde el reconocedor nativo necesita
- * el micrófono en exclusiva: arranca, nunca recibe audio y nada se resalta.
- * Acá usamos un único micrófono y mandamos el audio a Whisper (Groq) cada pocos
- * segundos, que se comporta igual en computadora y en celular.
+ * Hay dos caminos para el resaltado y se eligen solos, en este orden:
+ *
+ * 1. RECONOCIMIENTO LOCAL (Web Speech API) — el rápido.
+ *    Corre dentro del dispositivo, sin red, con resultados parciales en décimas de
+ *    segundo. Es el único modo de que el resaltado vaya casi al instante.
+ *    No siempre se puede: en Chrome de Android el reconocedor nativo quiere el
+ *    micrófono en exclusiva y, como `MediaRecorder` ya lo tiene, arranca pero nunca
+ *    recibe audio. Por eso no miramos la plataforma: lo intentamos siempre y nos
+ *    quedamos con él solo si entrega resultados.
+ *
+ * 2. WHISPER EN EL SERVIDOR (Groq) — el que siempre funciona.
+ *    Arranca en paralelo desde el comienzo y se apaga apenas el reconocimiento
+ *    local da señales de vida. Si el local nunca responde, este queda como estaba.
+ *    Tiene un piso de latencia de un segundo y pico: es una ida y vuelta por red.
+ *
+ * El análisis final de la lectura SIEMPRE usa el audio grabado con Whisper, sin
+ * importar cuál de los dos haya resaltado en vivo. El reconocimiento local se abre
+ * después de que `MediaRecorder` tomó el micrófono, así que la grabación no se ve
+ * afectada aunque el reconocedor falle.
  *
  * MODO VENTANA (el normal, webm/ogg):
  * cada ciclo manda solo los últimos ~10 segundos, con el primer chunk pegado
@@ -94,6 +149,14 @@ export function useAudioRecorder() {
   /** Ciclos pendientes de saltear tras chocar con el límite de peticiones. */
   const saltearCiclosRef = useRef(0);
 
+  // Reconocimiento local: cuando entrega resultados, es la fuente del resaltado.
+  const reconocedorRef = useRef<Reconocedor | null>(null);
+  const usandoLocalRef = useRef(false);
+  /** Texto ya dado por definitivo por el reconocedor (sobrevive a los reinicios). */
+  const localFinalizadoRef = useRef('');
+  const localActivoRef = useRef(false);
+  const [liveFuente, setLiveFuente] = useState<LiveFuente>('ninguna');
+
   const stopLiveTranscription = useCallback(() => {
     if (liveTimerRef.current) {
       clearInterval(liveTimerRef.current);
@@ -109,6 +172,108 @@ export function useAudioRecorder() {
     }
     liveInFlightRef.current = false;
   }, []);
+
+  const detenerReconocedorLocal = useCallback(() => {
+    localActivoRef.current = false;
+    const r = reconocedorRef.current;
+    reconocedorRef.current = null;
+    if (r) {
+      r.onresult = null;
+      r.onerror = null;
+      r.onend = null;
+      try { r.abort(); } catch { /* ya estaba parado */ }
+    }
+  }, []);
+
+  /**
+   * Arranca el reconocimiento local del navegador.
+   *
+   * Corre dentro del dispositivo, sin red: los resultados parciales llegan en unas
+   * décimas de segundo, contra el segundo y pico que tarda cualquier ida y vuelta
+   * al servidor. Es el único camino para que el resaltado vaya casi al instante.
+   *
+   * No todos los equipos lo permiten mientras `MediaRecorder` tiene el micrófono
+   * (en Chrome de Android el reconocedor arranca pero nunca recibe audio). Por eso
+   * no miramos la plataforma: lo intentamos siempre y comprobamos si llega algo.
+   * Si no llega, sigue mandando a Whisper como hasta ahora. Importante: el
+   * reconocedor se abre DESPUÉS de que MediaRecorder ya tomó el micrófono, así que
+   * la grabación nunca se ve afectada aunque el reconocedor falle.
+   */
+  const iniciarReconocedorLocal = useCallback(() => {
+    const Ctor = obtenerReconocedor();
+    if (!Ctor) return;
+
+    let r: Reconocedor;
+    try {
+      r = new Ctor();
+    } catch {
+      return;
+    }
+
+    r.continuous = true;
+    r.interimResults = true;   // los parciales son los que dan la sensación de instantáneo
+    r.lang = 'es-AR';
+
+    localFinalizadoRef.current = '';
+    localActivoRef.current = true;
+    let reinicios = 0;
+
+    r.onresult = (e) => {
+      let parcial = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) localFinalizadoRef.current += res[0].transcript + ' ';
+        else parcial += res[0].transcript + ' ';
+      }
+
+      const texto = (localFinalizadoRef.current + parcial).trim();
+      if (!texto) return;
+      reinicios = 0;   // está entregando resultados: los reinicios previos no cuentan
+
+      // Llegó audio: el reconocimiento local funciona en este equipo. Cortamos el
+      // envío a Whisper, que ya no hace falta para el resaltado.
+      if (!usandoLocalRef.current) {
+        usandoLocalRef.current = true;
+        stopLiveTranscription();
+        setLiveFuente('local');
+      }
+
+      const palabras = texto.split(/\s+/).filter(w => w.length > 0);
+      palabrasRef.current = palabras;
+      setLiveWords(palabras);
+      setLiveTranscript(texto);
+      setLiveStatus('active');
+    };
+
+    r.onerror = (e) => {
+      // Errores de los que no se vuelve: no tiene sentido reintentar, seguimos con
+      // Whisper. Sin esto `onend` reintentaría en bucle cerrado y calentaría el equipo.
+      const motivo = e.error || '';
+      if (motivo === 'not-allowed' || motivo === 'service-not-allowed' || motivo === 'audio-capture') {
+        localActivoRef.current = false;
+      }
+      // El resto (`no-speech`, `network`, `aborted`) son pasajeros: los maneja onend.
+    };
+
+    r.onend = () => {
+      // El reconocedor se corta solo tras un silencio largo. Mientras el alumno
+      // siga grabando lo reactivamos para no perder el resto de la lectura.
+      if (!localActivoRef.current) return;
+      if (reinicios >= MAX_REINICIOS_LOCAL) {
+        localActivoRef.current = false;
+        return;
+      }
+      reinicios++;
+      try { r.start(); } catch { /* todavía no terminó de cerrar */ }
+    };
+
+    try {
+      r.start();
+      reconocedorRef.current = r;
+    } catch {
+      localActivoRef.current = false;
+    }
+  }, [stopLiveTranscription]);
 
   /** Arma el blob a mandar: la ventana de los últimos segundos, o todo si estamos en modo completo. */
   const armarBlobEnVivo = useCallback((mimeType: string): { blob: Blob; segundos: number } | null => {
@@ -136,6 +301,8 @@ export function useAudioRecorder() {
     // actualización antes que encolar peticiones y quedar cada vez más atrasados.
     if (liveInFlightRef.current) return;
     if (audioChunks.current.length === 0) return;
+    // El reconocimiento local ya se hizo cargo del resaltado.
+    if (usandoLocalRef.current) return;
     // Estamos esperando a que se libere el límite de peticiones.
     if (saltearCiclosRef.current > 0) {
       saltearCiclosRef.current--;
@@ -283,9 +450,14 @@ export function useAudioRecorder() {
         modoVentanaRef.current = soportaVentana(mimeTypeRef.current);
         setLiveTranscript('');
         setLiveWords([]);
+        usandoLocalRef.current = false;
+        setLiveFuente('servidor');
         setLiveStatus('starting');
         liveFirstTimerRef.current = setTimeout(sendLiveChunk, LIVE_FIRST_MS);
         liveTimerRef.current = setInterval(sendLiveChunk, LIVE_INTERVAL_MS);
+        // Se intenta despues de que MediaRecorder ya tomo el microfono: si este
+        // equipo no lo permite, el reconocedor no recibe nada y seguimos con Whisper.
+        iniciarReconocedorLocal();
       }
     } catch (err: unknown) {
       console.error('Error accessing microphone:', err);
@@ -299,20 +471,25 @@ export function useAudioRecorder() {
         alert('No se pudo acceder al micrófono. Revisá que ninguna otra app lo esté usando y volvé a intentar.');
       }
     }
-  }, [sendLiveChunk]);
+  }, [sendLiveChunk, iniciarReconocedorLocal]);
 
   const stopRecording = useCallback(() => {
     stopLiveTranscription();
+    detenerReconocedorLocal();
     setLiveStatus('idle');
+    setLiveFuente('ninguna');
     if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
       mediaRecorder.current.stop();
       mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
     }
     setIsRecording(false);
-  }, [stopLiveTranscription]);
+  }, [stopLiveTranscription, detenerReconocedorLocal]);
 
   const resetRecording = useCallback(() => {
     stopLiveTranscription();
+    detenerReconocedorLocal();
+    usandoLocalRef.current = false;
+    setLiveFuente('ninguna');
     audioChunks.current = [];
     palabrasRef.current = [];
     ultimoAplicadoTsRef.current = 0;
@@ -324,10 +501,13 @@ export function useAudioRecorder() {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-  }, [stopLiveTranscription]);
+  }, [stopLiveTranscription, detenerReconocedorLocal]);
 
-  // Cortar timers y peticiones si el componente se desmonta a mitad de la lectura.
-  useEffect(() => stopLiveTranscription, [stopLiveTranscription]);
+  // Cortar timers, peticiones y reconocedor si el componente se desmonta a mitad de la lectura.
+  useEffect(() => () => {
+    stopLiveTranscription();
+    detenerReconocedorLocal();
+  }, [stopLiveTranscription, detenerReconocedorLocal]);
 
   return {
     isRecording,
@@ -336,6 +516,8 @@ export function useAudioRecorder() {
     /** mimeType real de la grabación, necesario para nombrar bien el archivo al enviarlo. */
     audioMimeType: mimeTypeRef.current,
     liveStatus,
+    /** 'local' = reconocimiento del navegador (instantáneo); 'servidor' = Whisper. */
+    liveFuente,
     liveTranscript,
     liveWords,
     startRecording,
