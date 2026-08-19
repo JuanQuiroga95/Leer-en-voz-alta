@@ -22,16 +22,16 @@ body {
   font-family: 'Nunito', sans-serif;
   background: #d8e8f4;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px 10px 40px;
 }
 
 /* DEVICE FRAME */
+/* El centrado vive acá y no en el body: si el body centra con flex, los paneles
+   de admin y profesor (que no usan .device) no se estiran, toman su ancho
+   intrinseco y quedan cortados por ambos lados en el celular. */
 .device {
-  width: 100%;
+  width: calc(100% - 20px);
   max-width: 420px;
+  margin: 20px auto 40px;
   background: var(--blanco);
   border-radius: 24px;
   box-shadow: var(--sombra-lg);
@@ -672,4 +672,136 @@ body {
 .analysis-loading-text {
   font-size: 14px; color: #a8d4f5; font-weight: 600;
   text-align: center;
+}
+
+/* ===================== PANELES ADMIN / PROFESOR ===================== */
+/* Estos paneles se disenaron para escritorio y quedaban cortados en el celular.
+   El layout vive en estas clases (no en estilos inline) para poder aplicarles
+   media queries. */
+
+.panel-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 40px 20px;
+  font-family: "Inter", "Nunito", sans-serif;
+}
+
+.panel-shell {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 20px 30px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+}
+.panel-header h1 {
+  margin: 0;
+  color: #1a202c;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.panel-header p {
+  margin: 5px 0 0 0;
+  color: #718096;
+}
+
+/* Fila de tarjetas de estadisticas */
+.panel-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+.panel-stat {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+}
+.panel-stat-icon { font-size: 40px; line-height: 1; flex-shrink: 0; }
+.panel-stat-label {
+  font-size: 14px; color: #718096; font-weight: 600;
+  text-transform: uppercase;
+}
+.panel-stat-value { font-size: 28px; color: #2d3748; font-weight: 800; }
+
+/* Grilla de graficos */
+.panel-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.panel-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 24px;
+  padding: 25px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.05);
+  min-width: 0;
+}
+.panel-card h3 { margin: 0 0 20px 0; color: #2d3748; }
+.panel-card-lg { padding: 30px; }
+
+.panel-chart-box { height: 250px; width: 100%; }
+
+/* Barra de titulo + botones de una seccion */
+.panel-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+.panel-toolbar h2 { margin: 0; color: #2d3748; font-size: 22px; }
+.panel-toolbar-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Las tablas scrollean dentro de su caja, nunca empujan la pagina */
+.panel-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 900px) {
+  .panel-charts { grid-template-columns: 1fr; }
+  .panel-stats { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 640px) {
+  .panel-page { padding: 14px 12px 28px; }
+  .panel-header {
+    margin-bottom: 20px;
+    padding: 16px 18px;
+    border-radius: 14px;
+  }
+  .panel-header h1 { font-size: 21px; }
+  .panel-header p { font-size: 13px; }
+  .panel-stats { grid-template-columns: 1fr; gap: 12px; margin-bottom: 20px; }
+  .panel-stat { padding: 14px 16px; gap: 14px; border-radius: 16px; }
+  .panel-stat-icon { font-size: 30px; }
+  .panel-stat-label { font-size: 12px; }
+  .panel-stat-value { font-size: 24px; }
+  .panel-charts { gap: 14px; margin-bottom: 20px; }
+  .panel-card,
+  .panel-card-lg { padding: 16px 14px; border-radius: 18px; }
+  .panel-card h3 { font-size: 15px; margin-bottom: 14px; }
+  .panel-chart-box { height: 210px; }
+  .panel-toolbar h2 { font-size: 18px; }
+  .panel-toolbar-actions { width: 100%; }
+  .panel-toolbar-actions > * { flex: 1 1 auto; text-align: center; }
 }

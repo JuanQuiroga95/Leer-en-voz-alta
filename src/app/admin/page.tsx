@@ -158,47 +158,47 @@ export default function AdminPanel() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)', padding: '40px 20px', fontFamily: '"Inter", sans-serif' }}>
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px', background: 'rgba(255, 255, 255, 0.8)', padding: '20px 30px', borderRadius: '16px', boxShadow: '0 8px 32px rgba(31, 38, 135, 0.1)', backdropFilter: 'blur(10px)' }}>
+    <div className="panel-page">
+      <div className="panel-shell">
+        <header className="panel-header">
           <div>
-            <h1 style={{ margin: 0, color: '#1a202c', fontSize: '28px', fontWeight: 800 }}>Panel de Administración</h1>
-            <p style={{ margin: '5px 0 0 0', color: '#718096' }}>Sistema Leer en Voz Alta · Universo Videla</p>
+            <h1>Panel de Administración</h1>
+            <p>Sistema Leer en Voz Alta · Universo Videla</p>
           </div>
           <button onClick={handleLogout} style={{ padding: '10px 20px', background: '#ff4b4b', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 14px rgba(255, 75, 75, 0.4)', transition: 'all 0.2s' }}>
             Cerrar Sesión
           </button>
         </header>
 
-        <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
-          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ fontSize: '40px' }}>👥</div>
+        <div className="panel-stats">
+          <div className="panel-stat">
+            <div className="panel-stat-icon">👥</div>
             <div>
-              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Total Alumnos</div>
-              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{totalStudents}</div>
+              <div className="panel-stat-label">Total Alumnos</div>
+              <div className="panel-stat-value">{totalStudents}</div>
             </div>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ fontSize: '40px' }}>👨‍🏫</div>
+          <div className="panel-stat">
+            <div className="panel-stat-icon">👨‍🏫</div>
             <div>
-              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Total Profesores</div>
-              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{totalTeachers}</div>
+              <div className="panel-stat-label">Total Profesores</div>
+              <div className="panel-stat-value">{totalTeachers}</div>
             </div>
           </div>
-          <div style={{ flex: 1, background: 'rgba(255, 255, 255, 0.9)', borderRadius: '20px', padding: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div style={{ fontSize: '40px' }}>📊</div>
+          <div className="panel-stat">
+            <div className="panel-stat-icon">📊</div>
             <div>
-              <div style={{ fontSize: '14px', color: '#718096', fontWeight: 600, textTransform: 'uppercase' }}>Promedio Global</div>
-              <div style={{ fontSize: '28px', color: '#2d3748', fontWeight: 800 }}>{stats?.avgPlatformScore || 0}/100</div>
+              <div className="panel-stat-label">Promedio Global</div>
+              <div className="panel-stat-value">{stats?.avgPlatformScore || 0}/100</div>
             </div>
           </div>
         </div>
 
         {stats && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-            <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '25px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>Lecturas Completadas por División</h3>
-              <div style={{ height: '250px' }}>
+          <div className="panel-charts">
+            <section className="panel-card">
+              <h3>Lecturas Completadas por División</h3>
+              <div className="panel-chart-box">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={stats.readingsByDivision}>
                     <XAxis dataKey="name" stroke="#a0aec0" fontSize={12} tickLine={false} axisLine={false} />
@@ -210,9 +210,9 @@ export default function AdminPanel() {
               </div>
             </section>
 
-            <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '25px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>Promedio Histórico de Notas</h3>
-              <div style={{ height: '250px' }}>
+            <section className="panel-card">
+              <h3>Promedio Histórico de Notas</h3>
+              <div className="panel-chart-box">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={stats.scoreHistory}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -227,10 +227,10 @@ export default function AdminPanel() {
           </div>
         )}
 
-        <section style={{ background: 'rgba(255, 255, 255, 0.9)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 40px rgba(0,0,0,0.05)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
-            <h2 style={{ margin: 0, color: '#2d3748', fontSize: '22px' }}>Gestión de Usuarios</h2>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <section className="panel-card panel-card-lg">
+          <div className="panel-toolbar">
+            <h2>Gestión de Usuarios</h2>
+            <div className="panel-toolbar-actions">
               <button onClick={handleDownloadTemplate} style={{ padding: '10px 16px', background: '#edf2f7', color: '#4a5568', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}>
                 Descargar Plantilla CSV
               </button>
@@ -247,7 +247,7 @@ export default function AdminPanel() {
           {loading ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>Cargando usuarios...</div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div className="panel-table-wrap">
               <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 10px' }}>
                 <thead>
                   <tr style={{ color: '#a0aec0', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
@@ -295,8 +295,8 @@ export default function AdminPanel() {
       </div>
 
       {(editUser || isCreating) && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
+          <div style={{ background: 'white', padding: '24px', borderRadius: '20px', width: '100%', maxWidth: '400px', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}>
             <h2 style={{ margin: '0 0 20px 0', color: '#2d3748' }}>{isCreating ? 'Nuevo Usuario' : 'Editar Usuario'}</h2>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>

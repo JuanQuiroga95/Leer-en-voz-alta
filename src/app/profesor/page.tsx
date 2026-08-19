@@ -23,20 +23,21 @@ function avgOf(arr: number[]) {
 
 // ────────────────────── Styles ──────────────────────
 const S = {
-  page: { minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)", padding: "30px 20px", fontFamily: '"Inter", -apple-system, sans-serif', color: "#e2e8f0" } as React.CSSProperties,
+  page: { minHeight: "100vh", background: "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)", padding: "clamp(14px, 3vw, 30px) clamp(12px, 3vw, 20px)", fontFamily: '"Inter", -apple-system, sans-serif', color: "#e2e8f0" } as React.CSSProperties,
   container: { maxWidth: 1200, margin: "0 auto" } as React.CSSProperties,
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 30, padding: "20px 28px", background: "rgba(30, 41, 59, 0.8)", borderRadius: 16, border: "1px solid rgba(148, 163, 184, 0.1)", backdropFilter: "blur(12px)" } as React.CSSProperties,
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 30, padding: "20px 28px", background: "rgba(30, 41, 59, 0.8)", borderRadius: 16, border: "1px solid rgba(148, 163, 184, 0.1)", backdropFilter: "blur(12px)" } as React.CSSProperties,
   headerTitle: { margin: 0, fontSize: 24, fontWeight: 800, color: "#f1f5f9" } as React.CSSProperties,
   headerSub: { margin: "4px 0 0", fontSize: 13, color: "#94a3b8" } as React.CSSProperties,
   logoutBtn: { padding: "8px 18px", background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" } as React.CSSProperties,
-  tabBar: { display: "flex", gap: 4, marginBottom: 24, background: "rgba(30, 41, 59, 0.6)", borderRadius: 12, padding: 4, border: "1px solid rgba(148, 163, 184, 0.1)" } as React.CSSProperties,
+  tabBar: { display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 24, background: "rgba(30, 41, 59, 0.6)", borderRadius: 12, padding: 4, border: "1px solid rgba(148, 163, 184, 0.1)" } as React.CSSProperties,
   tab: (active: boolean) => ({ flex: 1, padding: "10px 16px", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", fontFamily: "inherit", background: active ? "linear-gradient(135deg, #3b82f6, #6366f1)" : "transparent", color: active ? "#fff" : "#94a3b8" }) as React.CSSProperties,
   statsRow: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 24 } as React.CSSProperties,
   statCard: (accent: string) => ({ background: "rgba(30, 41, 59, 0.7)", borderRadius: 16, padding: "18px 20px", border: `1px solid rgba(148, 163, 184, 0.1)`, borderLeft: `4px solid ${accent}`, backdropFilter: "blur(8px)" }) as React.CSSProperties,
   statLabel: { fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: 0.5 },
   statValue: { fontSize: 28, fontWeight: 900, color: "#f1f5f9", marginTop: 4 },
   statSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
-  card: { background: "rgba(30, 41, 59, 0.7)", borderRadius: 16, padding: "24px", border: "1px solid rgba(148, 163, 184, 0.1)", marginBottom: 16, backdropFilter: "blur(8px)" } as React.CSSProperties,
+  // overflowX: las tablas anchas scrollean dentro de la tarjeta en vez de estirar la pagina en el celular.
+  card: { background: "rgba(30, 41, 59, 0.7)", borderRadius: 16, padding: "24px", border: "1px solid rgba(148, 163, 184, 0.1)", marginBottom: 16, backdropFilter: "blur(8px)", overflowX: "auto" } as React.CSSProperties,
   cardTitle: { fontSize: 16, fontWeight: 800, color: "#f1f5f9", marginBottom: 16 },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
   th: { padding: "10px 12px", textAlign: "left" as const, fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: 0.5, borderBottom: "1px solid rgba(148, 163, 184, 0.15)" },
@@ -313,7 +314,7 @@ export default function ProfesorPanel() {
                   {divisions.length === 0 ? (
                     <div style={S.empty}>No hay cursos con alumnos registrados.</div>
                   ) : (
-                    <table style={S.table}>
+                    <table style={{ ...S.table, minWidth: 520 }}>
                       <thead>
                         <tr>
                           <th style={S.th}>Curso</th>
@@ -371,7 +372,7 @@ export default function ProfesorPanel() {
                   {allProgress.length === 0 ? (
                     <div style={S.empty}>No hay evaluaciones completadas todavía.</div>
                   ) : (
-                    <table style={S.table}>
+                    <table style={{ ...S.table, minWidth: 520 }}>
                       <thead>
                         <tr>
                           <th style={S.th}>Alumno</th>
@@ -461,7 +462,7 @@ export default function ProfesorPanel() {
 
                 <div style={S.card}>
                   <div style={S.cardTitle}>Alumnos de {selectedDivision}</div>
-                  <table style={S.table}>
+                  <table style={{ ...S.table, minWidth: 520 }}>
                     <thead>
                       <tr>
                         <th style={S.th}>Alumno</th>
@@ -623,7 +624,7 @@ export default function ProfesorPanel() {
                             <span style={S.badge(level.color, level.bg)}>{level.label}</span>
                           </div>
 
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginBottom: 12 }}>
                             <div style={{ background: "rgba(59,130,246,0.1)", padding: "8px 12px", borderRadius: 10, textAlign: "center" }}>
                               <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase" }}>Fluidez</div>
                               <div style={{ fontSize: 18, fontWeight: 800, color: "#60a5fa" }}>{p.aiScore || 0}</div>
@@ -726,7 +727,7 @@ export default function ProfesorPanel() {
             {/* ═══════════ VISTA DE ASIGNACIONES ═══════════ */}
             {view === "asignaciones" && (
               <>
-                <div style={{ display: "grid", gridTemplateColumns: "300px 1fr", gap: 24 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: 24 }}>
                   {/* Formulario */}
                   <div style={S.card}>
                     <div style={S.cardTitle}>Nueva Asignación</div>
@@ -781,7 +782,7 @@ export default function ProfesorPanel() {
                     {assignments.length === 0 ? (
                       <div style={S.empty}>No hay textos asignados.</div>
                     ) : (
-                      <table style={S.table}>
+                      <table style={{ ...S.table, minWidth: 520 }}>
                         <thead>
                           <tr>
                             <th style={S.th}>Texto</th>
