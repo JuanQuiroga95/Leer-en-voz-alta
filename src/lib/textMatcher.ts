@@ -24,6 +24,57 @@ export function normalizeWord(word: string): string {
 }
 
 /**
+ * Une la transcripción de una ventana de audio con lo que ya veníamos acumulando.
+ *
+ * En el seguimiento en vivo no mandamos toda la lectura cada vez, sino los últimos
+ * segundos. Como las ventanas se solapan, la nueva transcripción repite palabras que
+ * ya teníamos: buscamos el solape más largo entre el final de lo acumulado y el
+ * principio de la ventana, y agregamos solo lo que sigue.
+ *
+ * El solape se compara de forma tolerante (no exacta) porque Whisper transcribe cada
+ * ventana por separado y suele variar alguna palabra, meter una muletilla o cambiar
+ * la puntuación. Exigir coincidencia exacta hacía que el empalme fallara y se
+ * duplicara media lectura, y con palabras duplicadas el resaltado deja huecos.
+ *
+ * `maxNuevas` acota el destrozo cuando aun así no se encuentra el solape: como las
+ * ventanas se solapan por diseño, solo puede haber unas pocas palabras nuevas por
+ * ciclo. Sin ese tope se agregaría la ventana entera y se duplicaría todo.
+ */
+export function mergeSpokenWords(
+  acumuladas: string[],
+  ventana: string[],
+  maxNuevas?: number
+): string[] {
+  if (ventana.length === 0) return acumuladas;
+  if (acumuladas.length === 0) return [...ventana];
+
+  const maxSolape = Math.min(acumuladas.length, ventana.length);
+  const cola = acumuladas.slice(-maxSolape).map(normalizeWord);
+  const cabeza = ventana.slice(0, maxSolape).map(normalizeWord);
+
+  // Proporción mínima de palabras que deben coincidir para aceptar un solape.
+  const UMBRAL = 0.6;
+
+  for (let k = maxSolape; k >= 1; k--) {
+    let coincidencias = 0;
+    for (let i = 0; i < k; i++) {
+      const a = cola[cola.length - k + i];
+      const b = cabeza[i];
+      if (a === b || similarity(a, b) >= 0.8) coincidencias++;
+    }
+    // Con una sola palabra de solape exigimos coincidencia exacta: una coincidencia
+    // suelta es demasiado fácil de encontrar por casualidad.
+    const aceptable = k === 1 ? coincidencias === 1 : coincidencias / k >= UMBRAL;
+    if (aceptable) return [...acumuladas, ...ventana.slice(k)];
+  }
+
+  // No se encontró solape. Agregamos solo lo último de la ventana, que es lo único
+  // que puede ser nuevo de verdad.
+  const nuevas = maxNuevas !== undefined ? ventana.slice(-maxNuevas) : ventana;
+  return [...acumuladas, ...nuevas];
+}
+
+/**
  * Calcula la distancia de Levenshtein entre dos strings.
  */
 export function levenshteinDistance(a: string, b: string): number {
