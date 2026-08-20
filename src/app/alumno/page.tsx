@@ -175,7 +175,9 @@ export default function AlumnoPanel() {
       startQuestionTimer();
     } catch (error: any) {
       console.error(error);
-      alert(`Hubo un error al analizar el audio.\n\nDetalle técnico: ${error.message}\n\nAsegurate de haber recargado la página con Ctrl+Shift+R.`);
+      // Tu grabación no se perdió: el audio sigue en pantalla y se puede reintentar
+      // sin volver a leer. Eso es lo que el alumno necesita saber.
+      alert(`${error.message}\n\nTu grabación no se perdió. Tocá "Analizar" de nuevo en un ratito, y si sigue fallando avisale al profe.`);
     } finally {
       setIsAnalyzing(false);
     }

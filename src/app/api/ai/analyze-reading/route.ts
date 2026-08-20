@@ -51,9 +51,7 @@ export async function POST(request: Request) {
     // 2. Analyze reading fluency with expanded census metrics using LLaMA (en Groq)
     let resultString = '';
     try {
-      const { contenido } = await analizarConRespaldo({
-        response_format: { type: 'json_object' },
-        messages: [
+      const { contenido } = await analizarConRespaldo([
           {
             role: 'system',
             content: `Eres un profesor experto en evaluar fluidez lectora en niños de secundaria, siguiendo la metodología del Censo de Fluidez y Comprensión Lectora de la DGE de Mendoza, Argentina.
@@ -76,7 +74,6 @@ Compara ambos textos y devuelve un análisis en formato JSON estricto con la sig
   "substitutedWords": [arreglo de objetos {"original": "palabra_del_texto", "said": "lo_que_dijo"} para sustituciones],
   "inventedWords": [arreglo de palabras que leyó mal o inventó que no son sustituciones claras],
   "selfCorrectedWords": [arreglo de palabras donde el alumno se corrigió a sí mismo - estas NO cuentan como error],
-  "wordByWordAnalysis": [arreglo de objetos {"expected": "palabra_esperada", "status": "correct|substituted|omitted|invented"} para cada palabra del texto original, EN ORDEN],
   "feedback": "mensaje corto motivador y constructivo para el estudiante en español, mencionando lo que hizo bien y dando un consejo específico para mejorar"
 }
 
@@ -94,8 +91,7 @@ REGLAS DE EVALUACIÓN (basadas en el Censo de Fluidez de Mendoza):
             role: 'user',
             content: `Texto original (${totalWords} palabras):\n${referenceText}\n\nTranscripción del alumno:\n${transcriptText}\n\nTiempo de lectura: ${timeSeconds} segundos\nTotal de palabras del texto: ${totalWords}\n\nIMPORTANTE: Tu respuesta debe ser ÚNICAMENTE un objeto JSON válido, sin ningún otro texto de introducción o cierre.`
           }
-        ]
-      });
+      ]);
       resultString = contenido;
     } catch (e: any) {
       console.error("Error del modelo de análisis en Groq:", e);
@@ -138,7 +134,7 @@ REGLAS DE EVALUACIÓN (basadas en el Censo de Fluidez de Mendoza):
       if (!Array.isArray(analysis.omittedWords)) analysis.omittedWords = [];
       if (!Array.isArray(analysis.substitutedWords)) analysis.substitutedWords = [];
       if (!Array.isArray(analysis.inventedWords)) analysis.inventedWords = [];
-      if (!Array.isArray(analysis.wordByWordAnalysis)) analysis.wordByWordAnalysis = [];
+      if (!Array.isArray(analysis.selfCorrectedWords)) analysis.selfCorrectedWords = [];
     } catch (e) {
       console.error("JSON Parse Error:", e);
       return NextResponse.json({ error: "El análisis devuelto no tiene el formato correcto." }, { status: 500 });
