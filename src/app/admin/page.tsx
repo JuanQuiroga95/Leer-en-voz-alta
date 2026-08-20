@@ -16,7 +16,101 @@ export default function AdminPanel() {
   const [formData, setFormData] = useState({ name: '', legajo: '', division: '', role: 'ALUMNO', password: '' });
   const [uploadingCSV, setUploadingCSV] = useState(false);
   const [seedingCenso, setSeedingCenso] = useState<string | null>(null);
+
+  // ── Borrado de datos ──
+  type TipoDato = { clave: string; nombre: string; detalle: string; destructivo: boolean };
+  const [purgaOpciones, setPurgaOpciones] = useState<{ tipos: TipoDato[]; palabraConfirmacion: string; divisiones: string[]; alumnos: any[] } | null>(null);
+  const [purgaAlcance, setPurgaAlcance] = useState<'global' | 'division' | 'alumno'>('alumno');
+  const [purgaDivision, setPurgaDivision] = useState('');
+  const [purgaUserId, setPurgaUserId] = useState('');
+  const [purgaTipos, setPurgaTipos] = useState<string[]>([]);
+  const [purgaModo, setPurgaModo] = useState<'TODAS' | 'EVALUACION' | 'PRACTICA'>('TODAS');
+  const [purgaPreview, setPurgaPreview] = useState<any>(null);
+  const [purgaConfirmacion, setPurgaConfirmacion] = useState('');
+  const [purgaOcupado, setPurgaOcupado] = useState(false);
+
+  const purgaNecesitaPalabra = purgaAlcance !== 'alumno';
+
+  // Cualquier cambio invalida la vista previa: nunca se borra segun un conteo viejo.
+  const cambiarPurga = (fn: () => void) => { fn(); setPurgaPreview(null); setPurgaConfirmacion(''); };
+
+  const purgaCuerpo = () => ({
+    alcance: purgaAlcance,
+    division: purgaAlcance === 'division' ? purgaDivision : undefined,
+    userId: purgaAlcance === 'alumno' ? purgaUserId : undefined,
+    tipos: purgaTipos,
+    modo: purgaModo,
+  });
+
+  const purgaListaParaSimular =
+    purgaTipos.length > 0 &&
+    (purgaAlcance === 'global' ||
+      (purgaAlcance === 'division' && !!purgaDivision) ||
+      (purgaAlcance === 'alumno' && !!purgaUserId));
+
+  const handleSimularPurga = async () => {
+    setPurgaOcupado(true);
+    setPurgaPreview(null);
+    try {
+      const res = await fetch('/api/admin/purgar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...purgaCuerpo(), simular: true }),
+      });
+      const data = await res.json();
+      if (res.ok) setPurgaPreview(data);
+      else alert(data.error || 'No se pudo calcular qué se borraría');
+    } catch {
+      alert('Error de conexión');
+    } finally {
+      setPurgaOcupado(false);
+    }
+  };
+
+  const handleBorrarDatos = async () => {
+    const total = Object.values(purgaPreview?.resumen || {}).reduce((a: number, b: any) => a + b, 0);
+    const donde = purgaAlcance === 'global' ? 'TODO EL SISTEMA'
+      : purgaAlcance === 'division' ? `el curso ${purgaDivision}`
+      : purgaOpciones?.alumnos.find(a => a.id === purgaUserId)?.name || 'el alumno';
+    if (!confirm(`Se van a borrar ${total} registros de ${donde}.
+
+Esto NO se puede deshacer. ¿Continuar?`)) return;
+
+    setPurgaOcupado(true);
+    try {
+      const res = await fetch('/api/admin/purgar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...purgaCuerpo(), simular: false, confirmacion: purgaConfirmacion }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const detalle = Object.entries(data.resumen)
+          .filter(([, v]) => (v as number) > 0)
+          .map(([k, v]) => `${v} ${k}`)
+          .join(', ');
+        alert(`Listo. Se borró: ${detalle || 'nada, no había datos'}.`);
+        setPurgaPreview(null);
+        setPurgaConfirmacion('');
+        fetchData();
+      } else {
+        alert(data.error || 'No se pudieron borrar los datos');
+      }
+    } catch {
+      alert('Error de conexión');
+    } finally {
+      setPurgaOcupado(false);
+    }
+  };
+
   const [colecciones, setColecciones] = useState<{ clave: string; nombre: string; descripcion: string; total: number; yaCargados: number }[]>([]);
+
+  const fetchPurgaOpciones = () => {
+    fetch('/api/admin/purgar')
+      .then(r => r.json())
+      .then(d => { if (d.tipos) setPurgaOpciones(d); })
+      .catch(() => { /* el panel sigue siendo usable sin esto */ });
+  };
 
   const fetchColecciones = () => {
     fetch('/api/admin/seed-censo')
@@ -43,6 +137,7 @@ export default function AdminPanel() {
   useEffect(() => {
     fetchData();
     fetchColecciones();
+    fetchPurgaOpciones();
   }, []);
 
   const totalUsers = users.length;
@@ -191,6 +286,9 @@ export default function AdminPanel() {
     }
   };
 
+  const sTitulo: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#718096', textTransform: 'uppercase', marginBottom: 10, letterSpacing: 0.4 };
+  const sInput: React.CSSProperties = { width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #e2e8f0', marginTop: 10, fontSize: 14 };
+
   return (
     <div className="panel-page">
       <div className="panel-shell">
@@ -295,6 +393,175 @@ export default function AdminPanel() {
               );
             })}
           </div>
+        </section>
+
+        <section className="panel-card" style={{ borderTop: '3px solid #e53e3e' }}>
+          <div className="panel-toolbar">
+            <div>
+              <h2>Borrar Datos</h2>
+              <p style={{ margin: '6px 0 0 0', color: '#718096', fontSize: '14px' }}>
+                Para dejar todo en cero antes de arrancar de verdad. Siempre se ve primero qué se va a borrar. No se puede deshacer.
+              </p>
+            </div>
+          </div>
+
+          {!purgaOpciones ? (
+            <div style={{ color: '#a0aec0', fontSize: 14, marginTop: 16 }}>Cargando opciones…</div>
+          ) : (
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+              {/* Paso 1: a quién */}
+              <div>
+                <div style={sTitulo}>1 · ¿De quién?</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {([
+                    ['alumno', 'Un alumno'],
+                    ['division', 'Un curso'],
+                    ['global', 'Todo el sistema'],
+                  ] as const).map(([valor, etiqueta]) => (
+                    <button
+                      key={valor}
+                      onClick={() => cambiarPurga(() => setPurgaAlcance(valor))}
+                      style={{
+                        padding: '8px 16px', borderRadius: 10, fontWeight: 600, cursor: 'pointer', fontSize: 14,
+                        border: purgaAlcance === valor ? '2px solid #e53e3e' : '1px solid #e2e8f0',
+                        background: purgaAlcance === valor ? '#fff5f5' : 'white',
+                        color: purgaAlcance === valor ? '#c53030' : '#4a5568',
+                      }}
+                    >
+                      {etiqueta}
+                    </button>
+                  ))}
+                </div>
+
+                {purgaAlcance === 'division' && (
+                  <select value={purgaDivision} onChange={e => cambiarPurga(() => setPurgaDivision(e.target.value))} style={sInput}>
+                    <option value="">Elegí un curso…</option>
+                    {purgaOpciones.divisiones.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                )}
+                {purgaAlcance === 'alumno' && (
+                  <select value={purgaUserId} onChange={e => cambiarPurga(() => setPurgaUserId(e.target.value))} style={sInput}>
+                    <option value="">Elegí un alumno…</option>
+                    {purgaOpciones.alumnos.map(a => (
+                      <option key={a.id} value={a.id}>{a.name} · {a.division || 'sin curso'}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Paso 2: qué */}
+              <div>
+                <div style={sTitulo}>2 · ¿Qué datos?</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 10 }}>
+                  {purgaOpciones.tipos.map(t => {
+                    const elegido = purgaTipos.includes(t.clave);
+                    return (
+                      <label key={t.clave} style={{
+                        display: 'flex', gap: 10, alignItems: 'flex-start', padding: 12, borderRadius: 10, cursor: 'pointer',
+                        border: elegido ? '2px solid #e53e3e' : '1px solid #e2e8f0',
+                        background: elegido ? '#fff5f5' : 'white',
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={elegido}
+                          onChange={() => cambiarPurga(() => setPurgaTipos(prev =>
+                            prev.includes(t.clave) ? prev.filter(x => x !== t.clave) : [...prev, t.clave]
+                          ))}
+                          style={{ marginTop: 3 }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, color: '#2d3748', fontSize: 14 }}>{t.nombre}</div>
+                          <div style={{ fontSize: 12, color: '#718096', marginTop: 3 }}>{t.detalle}</div>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {purgaTipos.some(t => ['lecturas', 'audios', 'analisisIA', 'devoluciones'].includes(t)) && (
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ fontSize: 13, color: '#4a5568', fontWeight: 600 }}>Aplicar solo a:</label>
+                    <select value={purgaModo} onChange={e => cambiarPurga(() => setPurgaModo(e.target.value as typeof purgaModo))} style={sInput}>
+                      <option value="TODAS">Todas las lecturas</option>
+                      <option value="EVALUACION">Solo las evaluaciones</option>
+                      <option value="PRACTICA">Solo las prácticas</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Paso 3: ver y confirmar */}
+              <div>
+                <div style={sTitulo}>3 · Revisar y borrar</div>
+                <button
+                  onClick={handleSimularPurga}
+                  disabled={!purgaListaParaSimular || purgaOcupado}
+                  style={{
+                    padding: '10px 20px', borderRadius: 10, fontWeight: 600, border: '1px solid #cbd5e0',
+                    background: !purgaListaParaSimular || purgaOcupado ? '#edf2f7' : 'white',
+                    color: !purgaListaParaSimular ? '#a0aec0' : '#2d3748',
+                    cursor: !purgaListaParaSimular || purgaOcupado ? 'default' : 'pointer',
+                  }}
+                >
+                  {purgaOcupado && !purgaPreview ? 'Calculando…' : 'Ver qué se va a borrar'}
+                </button>
+
+                {purgaPreview && (() => {
+                  const filas = Object.entries(purgaPreview.resumen).filter(([, v]) => (v as number) > 0);
+                  const total = Object.values(purgaPreview.resumen).reduce((a: number, b) => a + (b as number), 0);
+                  const nombreDe = (k: string) => purgaOpciones.tipos.find(t => t.clave === k)?.nombre || k;
+                  const faltaPalabra = purgaNecesitaPalabra && purgaConfirmacion !== purgaOpciones.palabraConfirmacion;
+
+                  return (
+                    <div style={{ marginTop: 14, padding: 16, borderRadius: 12, background: '#fff5f5', border: '1px solid #feb2b2' }}>
+                      {total === 0 ? (
+                        <div style={{ color: '#718096', fontSize: 14 }}>
+                          {purgaPreview.mensaje || 'No hay nada para borrar con esas opciones.'}
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontWeight: 700, color: '#c53030', marginBottom: 10 }}>
+                            Se van a borrar {total} registros
+                            {purgaPreview.alumnos !== null && ` de ${purgaPreview.alumnos} alumno${purgaPreview.alumnos === 1 ? '' : 's'}`}
+                          </div>
+                          <ul style={{ margin: '0 0 12px 0', paddingLeft: 20, color: '#4a5568', fontSize: 14 }}>
+                            {filas.map(([k, v]) => <li key={k}><strong>{v as number}</strong> · {nombreDe(k)}</li>)}
+                          </ul>
+
+                          {purgaNecesitaPalabra && (
+                            <div style={{ marginBottom: 12 }}>
+                              <label style={{ fontSize: 13, color: '#4a5568' }}>
+                                Escribí <strong>{purgaOpciones.palabraConfirmacion}</strong> para confirmar:
+                              </label>
+                              <input
+                                value={purgaConfirmacion}
+                                onChange={e => setPurgaConfirmacion(e.target.value)}
+                                placeholder={purgaOpciones.palabraConfirmacion}
+                                style={{ ...sInput, borderColor: '#feb2b2' }}
+                              />
+                            </div>
+                          )}
+
+                          <button
+                            onClick={handleBorrarDatos}
+                            disabled={purgaOcupado || faltaPalabra}
+                            style={{
+                              padding: '12px 24px', borderRadius: 10, fontWeight: 700, border: 'none', color: 'white',
+                              background: purgaOcupado || faltaPalabra ? '#fc8181' : '#e53e3e',
+                              cursor: purgaOcupado || faltaPalabra ? 'default' : 'pointer',
+                            }}
+                          >
+                            {purgaOcupado ? 'Borrando…' : `Borrar ${total} registros definitivamente`}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </section>
 
         <section className="panel-card panel-card-lg">
