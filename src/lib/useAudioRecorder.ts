@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { pickRecordingMimeType, fileNameForMimeType } from './audioFormat';
 import { mergeSpokenWords } from './textMatcher';
+import { iniciarReconocedorLocal, type ReconocedorActivo } from './reconocedorLocal';
 
 /** Cada cuánto mandamos audio a transcribir mientras el alumno lee. */
 const LIVE_INTERVAL_MS = 1500;
@@ -26,7 +27,7 @@ const CICLOS_ESPERA_429 = 4;
  * Tope de reinicios del reconocedor local. Se corta solo tras cada silencio largo y
  * lo reactivamos, pero si falla siempre este tope evita un bucle cerrado de reintentos.
  */
-const MAX_REINICIOS_LOCAL = 60;
+const MAX_REINICIOS_WEBSPEECH = 60;
 /**
  * Tope de audio acumulado que seguimos mandando en el modo de respaldo (~3 MB).
  * Vercel corta los request bodies alrededor de 4,5 MB; pasado ese punto dejamos de
@@ -36,8 +37,13 @@ const LIVE_MAX_BYTES = 3 * 1024 * 1024;
 
 export type LiveStatus = 'idle' | 'starting' | 'active' | 'error';
 
-/** De dónde salen las palabras que se están resaltando ahora mismo. */
-export type LiveFuente = 'ninguna' | 'local' | 'servidor';
+/**
+ * De dónde salen las palabras que se están resaltando, de mejor a peor:
+ * `modelo`     = modelo local con el vocabulario del texto (instantáneo y preciso)
+ * `navegador`  = reconocedor del navegador, Web Speech (rápido, menos preciso)
+ * `servidor`   = Whisper por red (siempre funciona, más de un segundo de retraso)
+ */
+export type LiveFuente = 'ninguna' | 'modelo' | 'navegador' | 'servidor';
 
 export interface StartRecordingOptions {
   /** Si se pasa, se transcribe en vivo para ir resaltando el texto mientras se lee. */
@@ -150,11 +156,16 @@ export function useAudioRecorder() {
   const saltearCiclosRef = useRef(0);
 
   // Reconocimiento local: cuando entrega resultados, es la fuente del resaltado.
-  const reconocedorRef = useRef<Reconocedor | null>(null);
-  const usandoLocalRef = useRef(false);
+  const webSpeechRef = useRef<Reconocedor | null>(null);
+  const usandoWebSpeechRef = useRef(false);
   /** Texto ya dado por definitivo por el reconocedor (sobrevive a los reinicios). */
-  const localFinalizadoRef = useRef('');
-  const localActivoRef = useRef(false);
+  const webSpeechFinalizadoRef = useRef('');
+  const webSpeechActivoRef = useRef(false);
+
+  // Modelo local: el mejor camino. Tarda en estar listo la primera vez (baja ~40 MB),
+  // asi que arranca en segundo plano y toma el control cuando puede.
+  const modeloLocalRef = useRef<ReconocedorActivo | null>(null);
+  const usandoModeloRef = useRef(false);
   const [liveFuente, setLiveFuente] = useState<LiveFuente>('ninguna');
 
   const stopLiveTranscription = useCallback(() => {
@@ -173,10 +184,17 @@ export function useAudioRecorder() {
     liveInFlightRef.current = false;
   }, []);
 
-  const detenerReconocedorLocal = useCallback(() => {
-    localActivoRef.current = false;
-    const r = reconocedorRef.current;
-    reconocedorRef.current = null;
+  const detenerModeloLocal = useCallback(() => {
+    usandoModeloRef.current = false;
+    const activo = modeloLocalRef.current;
+    modeloLocalRef.current = null;
+    activo?.detener();
+  }, []);
+
+  const detenerWebSpeech = useCallback(() => {
+    webSpeechActivoRef.current = false;
+    const r = webSpeechRef.current;
+    webSpeechRef.current = null;
     if (r) {
       r.onresult = null;
       r.onerror = null;
@@ -199,7 +217,7 @@ export function useAudioRecorder() {
    * reconocedor se abre DESPUÉS de que MediaRecorder ya tomó el micrófono, así que
    * la grabación nunca se ve afectada aunque el reconocedor falle.
    */
-  const iniciarReconocedorLocal = useCallback(() => {
+  const iniciarWebSpeech = useCallback(() => {
     const Ctor = obtenerReconocedor();
     if (!Ctor) return;
 
@@ -214,28 +232,30 @@ export function useAudioRecorder() {
     r.interimResults = true;   // los parciales son los que dan la sensación de instantáneo
     r.lang = 'es-AR';
 
-    localFinalizadoRef.current = '';
-    localActivoRef.current = true;
+    webSpeechFinalizadoRef.current = '';
+    webSpeechActivoRef.current = true;
     let reinicios = 0;
 
     r.onresult = (e) => {
       let parcial = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) localFinalizadoRef.current += res[0].transcript + ' ';
+        if (res.isFinal) webSpeechFinalizadoRef.current += res[0].transcript + ' ';
         else parcial += res[0].transcript + ' ';
       }
 
-      const texto = (localFinalizadoRef.current + parcial).trim();
+      const texto = (webSpeechFinalizadoRef.current + parcial).trim();
       if (!texto) return;
+      // El modelo local es mejor: si ya esta a cargo, este se calla.
+      if (usandoModeloRef.current) return;
       reinicios = 0;   // está entregando resultados: los reinicios previos no cuentan
 
       // Llegó audio: el reconocimiento local funciona en este equipo. Cortamos el
       // envío a Whisper, que ya no hace falta para el resaltado.
-      if (!usandoLocalRef.current) {
-        usandoLocalRef.current = true;
+      if (!usandoWebSpeechRef.current) {
+        usandoWebSpeechRef.current = true;
         stopLiveTranscription();
-        setLiveFuente('local');
+        setLiveFuente('navegador');
       }
 
       const palabras = texto.split(/\s+/).filter(w => w.length > 0);
@@ -250,7 +270,7 @@ export function useAudioRecorder() {
       // Whisper. Sin esto `onend` reintentaría en bucle cerrado y calentaría el equipo.
       const motivo = e.error || '';
       if (motivo === 'not-allowed' || motivo === 'service-not-allowed' || motivo === 'audio-capture') {
-        localActivoRef.current = false;
+        webSpeechActivoRef.current = false;
       }
       // El resto (`no-speech`, `network`, `aborted`) son pasajeros: los maneja onend.
     };
@@ -258,9 +278,9 @@ export function useAudioRecorder() {
     r.onend = () => {
       // El reconocedor se corta solo tras un silencio largo. Mientras el alumno
       // siga grabando lo reactivamos para no perder el resto de la lectura.
-      if (!localActivoRef.current) return;
-      if (reinicios >= MAX_REINICIOS_LOCAL) {
-        localActivoRef.current = false;
+      if (!webSpeechActivoRef.current) return;
+      if (reinicios >= MAX_REINICIOS_WEBSPEECH) {
+        webSpeechActivoRef.current = false;
         return;
       }
       reinicios++;
@@ -269,9 +289,9 @@ export function useAudioRecorder() {
 
     try {
       r.start();
-      reconocedorRef.current = r;
+      webSpeechRef.current = r;
     } catch {
-      localActivoRef.current = false;
+      webSpeechActivoRef.current = false;
     }
   }, [stopLiveTranscription]);
 
@@ -301,8 +321,8 @@ export function useAudioRecorder() {
     // actualización antes que encolar peticiones y quedar cada vez más atrasados.
     if (liveInFlightRef.current) return;
     if (audioChunks.current.length === 0) return;
-    // El reconocimiento local ya se hizo cargo del resaltado.
-    if (usandoLocalRef.current) return;
+    // Ya hay un reconocedor mas rapido a cargo del resaltado.
+    if (usandoWebSpeechRef.current || usandoModeloRef.current) return;
     // Estamos esperando a que se libere el límite de peticiones.
     if (saltearCiclosRef.current > 0) {
       saltearCiclosRef.current--;
@@ -450,14 +470,46 @@ export function useAudioRecorder() {
         modoVentanaRef.current = soportaVentana(mimeTypeRef.current);
         setLiveTranscript('');
         setLiveWords([]);
-        usandoLocalRef.current = false;
+        usandoWebSpeechRef.current = false;
+        usandoModeloRef.current = false;
         setLiveFuente('servidor');
         setLiveStatus('starting');
         liveFirstTimerRef.current = setTimeout(sendLiveChunk, LIVE_FIRST_MS);
         liveTimerRef.current = setInterval(sendLiveChunk, LIVE_INTERVAL_MS);
         // Se intenta despues de que MediaRecorder ya tomo el microfono: si este
         // equipo no lo permite, el reconocedor no recibe nada y seguimos con Whisper.
-        iniciarReconocedorLocal();
+        iniciarWebSpeech();
+
+        // El modelo local es el mejor de los tres pero la primera vez tiene que bajar
+        // ~40 MB. Arranca en segundo plano y toma el control recien cuando esta listo;
+        // hasta entonces resalta cualquiera de los otros dos. Si el dispositivo no da,
+        // devuelve null y no se toca nada.
+        iniciarReconocedorLocal({
+          stream,
+          textoReferencia: referenceTextRef.current,
+          onTexto: (texto) => {
+            if (!texto) return;
+            if (!usandoModeloRef.current) {
+              usandoModeloRef.current = true;
+              stopLiveTranscription();     // Whisper ya no hace falta
+              detenerWebSpeech();
+              setLiveFuente('modelo');
+            }
+            const palabras = texto.split(/\s+/).filter(w => w.length > 0);
+            palabrasRef.current = palabras;
+            setLiveWords(palabras);
+            setLiveTranscript(texto);
+            setLiveStatus('active');
+          },
+        }).then(activo => {
+          if (!activo) return;
+          // La lectura pudo haber terminado mientras el modelo cargaba.
+          if (mediaRecorder.current?.state !== 'recording') {
+            activo.detener();
+            return;
+          }
+          modeloLocalRef.current = activo;
+        });
       }
     } catch (err: unknown) {
       console.error('Error accessing microphone:', err);
@@ -471,11 +523,12 @@ export function useAudioRecorder() {
         alert('No se pudo acceder al micrófono. Revisá que ninguna otra app lo esté usando y volvé a intentar.');
       }
     }
-  }, [sendLiveChunk, iniciarReconocedorLocal]);
+  }, [sendLiveChunk, iniciarWebSpeech, stopLiveTranscription, detenerWebSpeech]);
 
   const stopRecording = useCallback(() => {
     stopLiveTranscription();
-    detenerReconocedorLocal();
+    detenerWebSpeech();
+    detenerModeloLocal();
     setLiveStatus('idle');
     setLiveFuente('ninguna');
     if (mediaRecorder.current && mediaRecorder.current.state === 'recording') {
@@ -483,12 +536,13 @@ export function useAudioRecorder() {
       mediaRecorder.current.stream.getTracks().forEach(track => track.stop());
     }
     setIsRecording(false);
-  }, [stopLiveTranscription, detenerReconocedorLocal]);
+  }, [stopLiveTranscription, detenerWebSpeech, detenerModeloLocal]);
 
   const resetRecording = useCallback(() => {
     stopLiveTranscription();
-    detenerReconocedorLocal();
-    usandoLocalRef.current = false;
+    detenerWebSpeech();
+    detenerModeloLocal();
+    usandoWebSpeechRef.current = false;
     setLiveFuente('ninguna');
     audioChunks.current = [];
     palabrasRef.current = [];
@@ -501,13 +555,14 @@ export function useAudioRecorder() {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-  }, [stopLiveTranscription, detenerReconocedorLocal]);
+  }, [stopLiveTranscription, detenerWebSpeech, detenerModeloLocal]);
 
   // Cortar timers, peticiones y reconocedor si el componente se desmonta a mitad de la lectura.
   useEffect(() => () => {
     stopLiveTranscription();
-    detenerReconocedorLocal();
-  }, [stopLiveTranscription, detenerReconocedorLocal]);
+    detenerWebSpeech();
+    detenerModeloLocal();
+  }, [stopLiveTranscription, detenerWebSpeech, detenerModeloLocal]);
 
   return {
     isRecording,

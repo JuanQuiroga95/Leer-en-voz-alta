@@ -45,5 +45,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // `modelos` queda afuera a propósito: ahí vive el modelo de reconocimiento de voz
+  // (~40 MB). No tiene nada privado y, si pasara por acá, la CDN no podría servirlo
+  // en frío y cada descarga despertaría una función.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|modelos|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };
