@@ -1,19 +1,11 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { toFile } from 'openai/uploads';
 import { fileNameForMimeType } from '@/lib/audioFormat';
+import { getGroqClient, analizarConRespaldo, MODELO_TRANSCRIPCION } from '@/lib/groq';
 
 // Transcribir + analizar una lectura completa puede pasarse del limite por defecto
 // de Vercel; sin esto las lecturas largas fallan con un 504 y el alumno no ve correcciones.
 export const maxDuration = 120;
-
-// Lazy init para evitar error de build cuando no hay GROQ_API_KEY
-function getGroqClient() {
-  return new OpenAI({
-    apiKey: process.env.GROQ_API_KEY,
-    baseURL: "https://api.groq.com/openai/v1",
-  });
-}
 
 export async function POST(request: Request) {
   try {
@@ -47,7 +39,7 @@ export async function POST(request: Request) {
     try {
       const transcription = await groq.audio.transcriptions.create({
         file: fileForGroq,
-        model: 'whisper-large-v3', // Modelo abierto ultra rápido en Groq
+        model: MODELO_TRANSCRIPCION,
         language: 'es',
       });
       transcriptText = transcription.text;
@@ -59,8 +51,7 @@ export async function POST(request: Request) {
     // 2. Analyze reading fluency with expanded census metrics using LLaMA (en Groq)
     let resultString = '';
     try {
-      const completion = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile', // Modelo más grande y capaz para formateo JSON complejo
+      const { contenido } = await analizarConRespaldo({
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -105,10 +96,13 @@ REGLAS DE EVALUACIÓN (basadas en el Censo de Fluidez de Mendoza):
           }
         ]
       });
-      resultString = completion.choices[0]?.message?.content || '{}';
+      resultString = contenido;
     } catch (e: any) {
-      console.error("Groq LLaMA Error:", e);
-      return NextResponse.json({ error: `Error Análisis Groq: ${e.message}` }, { status: 500 });
+      console.error("Error del modelo de análisis en Groq:", e);
+      return NextResponse.json(
+        { error: 'No se pudo analizar la lectura. El audio se grabó bien: probá de nuevo en un momento.', detalle: e?.message },
+        { status: 502 }
+      );
     }
 
     let analysis;

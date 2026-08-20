@@ -152,14 +152,18 @@ export default function AlumnoPanel() {
       });
       
       if (!response.ok) {
-        let errStr = 'Error desconocido';
+        let mensaje = 'No se pudo analizar la lectura.';
         try {
           const errData = await response.json();
-          errStr = errData.error || errStr;
-        } catch (e) {
-          errStr = `Error HTTP ${response.status} - Timeout o falla de Vercel`;
+          if (errData.error) mensaje = errData.error;
+          // El detalle tecnico va a la consola, no al alumno.
+          if (errData.detalle) console.error('Detalle del servidor:', errData.detalle);
+        } catch {
+          mensaje = response.status === 504
+            ? 'El análisis tardó demasiado. Suele pasar con lecturas largas o conexión lenta.'
+            : `No se pudo analizar la lectura (error ${response.status}).`;
         }
-        throw new Error(errStr);
+        throw new Error(mensaje);
       }
       
       const data = await response.json();
