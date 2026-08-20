@@ -105,16 +105,60 @@ export function levenshteinDistance(a: string, b: string): number {
 }
 
 /**
+ * Similitud entre dos palabras YA normalizadas (0 a 1).
+ *
+ * Es la version caliente: la alineación la llama decenas de miles de veces por
+ * cuadro, así que evita volver a normalizar y descarta por longitud antes de
+ * calcular la distancia, que es lo caro.
+ */
+function similitudNormalizada(a: string, b: string): number {
+  if (a === b) return 1;
+  const largoA = a.length;
+  const largoB = b.length;
+  if (largoA === 0 || largoB === 0) return 0;
+
+  const maxLen = largoA > largoB ? largoA : largoB;
+
+  // La distancia nunca baja de la diferencia de longitudes: si con eso solo ya no
+  // llega al umbral, no hace falta calcularla.
+  const difLargo = largoA > largoB ? largoA - largoB : largoB - largoA;
+  if (1 - difLargo / maxLen < SIM_MINIMA) return 0;
+
+  return 1 - distanciaEnDosFilas(a, b) / maxLen;
+}
+
+/** Levenshtein con dos filas planas: sin matrices por llamada, que es lo que más pesaba. */
+function distanciaEnDosFilas(a: string, b: string): number {
+  const n = a.length;
+  const m = b.length;
+  let previa = new Uint16Array(m + 1);
+  let actual = new Uint16Array(m + 1);
+
+  for (let j = 0; j <= m; j++) previa[j] = j;
+
+  for (let i = 1; i <= n; i++) {
+    actual[0] = i;
+    const ca = a.charCodeAt(i - 1);
+    for (let j = 1; j <= m; j++) {
+      const costo = ca === b.charCodeAt(j - 1) ? 0 : 1;
+      const sustituir = previa[j - 1] + costo;
+      const eliminar = previa[j] + 1;
+      const insertar = actual[j - 1] + 1;
+      actual[j] = sustituir < eliminar
+        ? (sustituir < insertar ? sustituir : insertar)
+        : (eliminar < insertar ? eliminar : insertar);
+    }
+    const tmp = previa; previa = actual; actual = tmp;
+  }
+
+  return previa[m];
+}
+
+/**
  * Calcula la similitud normalizada entre dos palabras (0 a 1).
  */
 export function similarity(a: string, b: string): number {
-  const normA = normalizeWord(a);
-  const normB = normalizeWord(b);
-  if (normA === normB) return 1;
-  if (normA.length === 0 || normB.length === 0) return 0;
-  const dist = levenshteinDistance(normA, normB);
-  const maxLen = Math.max(normA.length, normB.length);
-  return 1 - dist / maxLen;
+  return similitudNormalizada(normalizeWord(a), normalizeWord(b));
 }
 
 /**
@@ -124,73 +168,142 @@ export function tokenizeText(text: string): string[] {
   return text.split(/\s+/).filter(w => w.length > 0);
 }
 
+/** Ancho de banda de la alineación: cuántas palabras de desfasaje se toleran. */
+const BANDA = 40;
+/** Parecido mínimo para considerar que dos palabras son la misma. */
+const SIM_MINIMA = 0.5;
+/** Parecido a partir del cual se da por bien leída (debajo queda "casi"). */
+const SIM_CORRECTA = 0.8;
+/** Costo de saltear una palabra del texto (el alumno la omitió o no se reconoció). */
+const COSTO_OMISION = -0.35;
+/** Costo de descartar una palabra dicha (ruido, muletilla, repetición). */
+const COSTO_SOBRANTE = -0.35;
+/** Castigo de emparejar dos palabras que no se parecen. */
+const CASTIGO_DISTINTAS = -0.6;
+
 /**
- * Compara las palabras habladas contra las de referencia y devuelve un array con el estado de cada palabra.
- * 
- * Algoritmo simplificado y robusto:
- * - Avanza secuencialmente por las palabras de referencia.
- * - Para cada palabra hablada, busca la mejor coincidencia en una ventana adelante.
- * - NO marca palabras como "wrong" en tiempo real (solo correct/close/pending/current).
- *   Las omisiones solo se detectan al final cuando se detiene la grabación.
+ * Compara las palabras habladas contra las de referencia y devuelve el estado de cada una.
+ *
+ * Usa alineación por programación dinámica (estilo Needleman-Wunsch) en vez de ir
+ * emparejando palabra por palabra hacia adelante. La diferencia importa: el método
+ * codicioso decide cada palabra sin poder arrepentirse, así que un tramo mal
+ * reconocido lo dejaba trabado o lo mandaba a engancharse con la palabra equivocada
+ * más adelante. La alineación elige la correspondencia que mejor explica TODA la
+ * lectura de una vez, y por eso absorbe omisiones, inserciones y sustituciones.
+ *
+ * El cálculo se limita a una banda diagonal (`BANDA`): la lectura avanza en orden,
+ * así que no hace falta considerar desfasajes grandes, y así el costo queda lineal
+ * en vez de cuadrático. Esto corre varias veces por segundo en el celular del alumno.
+ *
+ * NO marca palabras como "wrong" en tiempo real (solo correct/close/pending/current).
+ * Las omisiones se evalúan al final, cuando se detiene la grabación.
  */
 export function matchWords(
   referenceWords: string[],
-  spokenWords: string[],
-  currentSpokenCount?: number
+  spokenWords: string[]
 ): WordMatch[] {
   const results: WordMatch[] = referenceWords.map(word => ({
     word,
     status: 'pending' as WordStatus,
   }));
 
+  if (results.length === 0) return results;
   if (spokenWords.length === 0) {
-    // Marcar la primera palabra como current si no hay nada hablado todavía
-    if (results.length > 0) {
-      results[0].status = 'current';
-    }
+    results[0].status = 'current';
     return results;
   }
 
-  let refPointer = 0;
-  const WINDOW = 3; // Ventana de búsqueda hacia adelante
+  const n = referenceWords.length;
+  const m = spokenWords.length;
 
-  for (let s = 0; s < spokenWords.length; s++) {
-    const spoken = spokenWords[s];
-    let bestMatch = -1;
-    let bestSim = 0;
+  // Normalizamos una sola vez: dentro del bucle esto se llamaría miles de veces.
+  const ref = referenceWords.map(normalizeWord);
+  const dic = spokenWords.map(normalizeWord);
 
-    // Buscar solo hacia adelante desde el pointer actual (no retroceder)
-    const searchEnd = Math.min(referenceWords.length - 1, refPointer + WINDOW);
+  // Sin la banda esto sería n*m; con ella, n*(2*BANDA).
+  const dentro = (i: number, j: number) => Math.abs(i - j) <= BANDA;
+  const MUY_MALO = -Infinity;
 
-    for (let r = refPointer; r <= searchEnd; r++) {
-      if (results[r].status === 'correct') continue;
-      
-      const sim = similarity(referenceWords[r], spoken);
-      if (sim > bestSim) {
-        bestSim = sim;
-        bestMatch = r;
-      }
-    }
-
-    if (bestMatch >= 0 && bestSim >= 0.5) {
-      if (bestSim >= 0.8) {
-        results[bestMatch].status = 'correct';
-        results[bestMatch].spokenAs = spoken;
-      } else {
-        results[bestMatch].status = 'close';
-        results[bestMatch].spokenAs = spoken;
-      }
-
-      // Avanzar el pointer al siguiente después del match
-      refPointer = bestMatch + 1;
-    }
-    // Si no hay match razonable, simplemente ignoramos esa palabra hablada (ruido, repetición, etc.)
+  // puntajes[i][j] = mejor puntaje alineando las primeras i de referencia con las
+  // primeras j dichas. Guardamos también de dónde vino cada celda para reconstruir.
+  const puntajes: Float64Array[] = [];
+  const origen: Int8Array[] = [];   // 1 = emparejar, 2 = omisión, 3 = sobrante
+  for (let i = 0; i <= n; i++) {
+    puntajes.push(new Float64Array(m + 1).fill(MUY_MALO));
+    origen.push(new Int8Array(m + 1));
   }
 
-  // Marcar la palabra "current" (la siguiente pendiente después del último match)
-  for (let i = refPointer; i < results.length; i++) {
-    if (results[i].status === 'pending') {
-      results[i].status = 'current';
+  puntajes[0][0] = 0;
+  for (let i = 1; i <= n && dentro(i, 0); i++) {
+    puntajes[i][0] = puntajes[i - 1][0] + COSTO_OMISION;
+    origen[i][0] = 2;
+  }
+  for (let j = 1; j <= m && dentro(0, j); j++) {
+    puntajes[0][j] = puntajes[0][j - 1] + COSTO_SOBRANTE;
+    origen[0][j] = 3;
+  }
+
+  for (let i = 1; i <= n; i++) {
+    const desde = Math.max(1, i - BANDA);
+    const hasta = Math.min(m, i + BANDA);
+    for (let j = desde; j <= hasta; j++) {
+      const sim = similitudNormalizada(ref[i - 1], dic[j - 1]);
+      const valorEmparejar = sim >= SIM_MINIMA ? sim : CASTIGO_DISTINTAS;
+
+      let mejor = puntajes[i - 1][j - 1] + valorEmparejar;
+      let de: number = 1;
+
+      const porOmision = puntajes[i - 1][j] + COSTO_OMISION;
+      if (porOmision > mejor) { mejor = porOmision; de = 2; }
+
+      const porSobrante = puntajes[i][j - 1] + COSTO_SOBRANTE;
+      if (porSobrante > mejor) { mejor = porSobrante; de = 3; }
+
+      puntajes[i][j] = mejor;
+      origen[i][j] = de;
+    }
+  }
+
+  // Reconstrucción. Arrancamos desde el final de lo DICHO, no del texto: el alumno
+  // todavía va por la mitad y el resto del texto no está leído.
+  let mejorI = 0;
+  let mejorPuntaje = MUY_MALO;
+  for (let i = 0; i <= n; i++) {
+    if (dentro(i, m) && puntajes[i][m] > mejorPuntaje) {
+      mejorPuntaje = puntajes[i][m];
+      mejorI = i;
+    }
+  }
+
+  let i = mejorI;
+  let j = m;
+  let ultimaLeida = -1;
+
+  while (i > 0 || j > 0) {
+    const de = origen[i][j];
+    if (de === 1 && i > 0 && j > 0) {
+      const sim = similitudNormalizada(ref[i - 1], dic[j - 1]);
+      if (sim >= SIM_MINIMA) {
+        results[i - 1].status = sim >= SIM_CORRECTA ? 'correct' : 'close';
+        results[i - 1].spokenAs = spokenWords[j - 1];
+        if (i - 1 > ultimaLeida) ultimaLeida = i - 1;
+      }
+      i--; j--;
+    } else if (de === 2 && i > 0) {
+      i--;
+    } else if (de === 3 && j > 0) {
+      j--;
+    } else if (i > 0) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+
+  // La palabra "current" es la primera pendiente después de lo ya leído.
+  for (let k = ultimaLeida + 1; k < results.length; k++) {
+    if (results[k].status === 'pending') {
+      results[k].status = 'current';
       break;
     }
   }
