@@ -181,7 +181,7 @@ Hoy en día, los mendocinos conviven con el Zonda como parte de su identidad. Es
   {
     title: 'Mercedes Sosa: la voz de América Latina',
     author: 'Textos de Fluidez Lectora (Videla)',
-    level: 'Medio',
+    level: 'Intermedio',
     year: 3,
     content: `Mercedes Sosa nació el 9 de julio de 1935 en San Miguel de Tucumán, Argentina. Creció en una familia humilde y desde joven mostró una voz que parecía surgir desde lo más profundo de la tierra. No cantaba solo con su garganta, sino con toda su historia y la historia de su pueblo.
 
@@ -227,7 +227,7 @@ Fue, es y seguirá siendo, la voz de América Latina.`,
   {
     title: 'El Dragón en la mitología china: símbolo de poder y sabiduría',
     author: 'Textos de Fluidez Lectora (Videla)',
-    level: 'Medio',
+    level: 'Intermedio',
     year: 3,
     content: `En la cultura occidental, los dragones suelen ser presentados como criaturas aterradoras que deben ser derrotadas por héroes valientes. Sin embargo, en la mitología china, el dragón representa algo completamente diferente: es un símbolo de poder, sabiduría, prosperidad y buena fortuna.
 
@@ -269,7 +269,7 @@ Conocer estas diferencias nos ayuda a comprender que no existe una única manera
   {
     title: 'Serena Williams: más allá del tenis',
     author: 'Textos de Fluidez Lectora (Videla)',
-    level: 'Medio',
+    level: 'Intermedio',
     year: 4,
     content: `Serena Williams nació el 26 de septiembre de 1981 en Saginaw, Michigan, Estados Unidos. Creció en Compton, un barrio de Los Ángeles conocido por sus altos índices de violencia y pobreza. Fue su padre, Richard Williams, quien decidió que sus hijas aprenderían a jugar al tenis, un deporte al que prácticamente ninguna familia afroamericana de ese entorno tenía acceso.
 
@@ -315,7 +315,7 @@ Su historia es la de alguien que convirtió cada obstáculo en una razón para s
   {
     title: 'El mito de Quetzalcóatl: la serpiente emplumada',
     author: 'Textos de Fluidez Lectora (Videla)',
-    level: 'Medio',
+    level: 'Intermedio',
     year: 4,
     content: `Entre las deidades más complejas y fascinantes de la mitología mesoamericana se encuentra Quetzalcóatl, cuyo nombre en náhuatl significa "serpiente emplumada". Esta figura combina dos elementos del mundo natural que representan dimensiones opuestas: la serpiente, que habita en la tierra, y las plumas del quetzal, un ave asociada al cielo y a la libertad. Su fusión simboliza la unión entre lo terrenal y lo divino.
 
@@ -355,7 +355,7 @@ El mito de Quetzalcóatl ilustra cómo las narraciones culturales no son solo hi
   {
     title: 'Astor Piazzolla: el hombre que revolucionó el tango',
     author: 'Textos de Fluidez Lectora (Videla)',
-    level: 'Medio',
+    level: 'Avanzado',
     year: 5,
     content: `Astor Piazzolla nació el 11 de marzo de 1921 en Mar del Plata, Argentina, aunque pasó gran parte de su infancia en Nueva York, ciudad donde su familia emigró en busca de mejores condiciones de vida. Fue en ese entorno multicultural donde entró en contacto con el jazz y la música clásica, influencias que más tarde marcarían de manera definitiva su visión artística.
 
@@ -401,7 +401,7 @@ Su legado demuestra que la identidad cultural no es un objeto estático que debe
   {
     title: 'La Pachamama: tierra, identidad y cosmovisión andina',
     author: 'Textos de Fluidez Lectora (Videla)',
-    level: 'Medio',
+    level: 'Avanzado',
     year: 5,
     content: `En la cosmovisión de los pueblos andinos, la Pachamama no es simplemente la tierra entendida como suelo o territorio. Es una entidad viva, una madre que sostiene, alimenta y da sentido a la existencia de quienes habitan sobre ella. Esta concepción, profundamente arraigada en culturas como la quechua y la aymara, establece una relación entre el ser humano y la naturaleza radicalmente diferente a la que propone la tradición occidental moderna.
 

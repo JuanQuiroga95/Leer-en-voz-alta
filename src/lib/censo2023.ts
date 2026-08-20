@@ -113,7 +113,7 @@ Los músculos que no utilizas pierden fuerza y volumen. Los que utilizas se vuel
   {
     title: 'Publicidad',
     author: 'Ejercicios de Comprensión Lectora para Secundaria — texto adaptado',
-    level: 'Medio',
+    level: 'Intermedio',
     year: 3,
     content: `Los especialistas en derechos humanos piensan que la representación de las personas en la publicidad a veces es injusta. En el caso de hombres y mujeres, existe una fuerte tendencia de presentar a los primeros como los protectores, los fuertes, mientras que a las segundas las vemos básicamente en roles secundarios.
 
@@ -157,7 +157,7 @@ Por otro lado, las marcas de algunas instituciones bancarias y bebidas gaseosas 
   {
     title: '¿Por qué es importante bostezar?',
     author: 'Redacción National Geographic — texto adaptado',
-    level: 'Medio',
+    level: 'Intermedio',
     year: 4,
     content: `Una persona bosteza una media de cinco a diez veces al día. La señal, provocada por un reflejo involuntario, ocurre cuando tienes sueño, estás aburrido o ansioso, pero aún no está clara la importancia de bostezar para el organismo.
 
@@ -209,7 +209,7 @@ En conclusión, los investigadores creen que, por lo tanto, la duración del bos
   {
     title: 'Supernovas: ¿En qué consiste este fenómeno?',
     author: 'Redacción National Geographic — texto adaptado',
-    level: 'Medio',
+    level: 'Avanzado',
     year: 5,
     content: `La supernova es el mayor estallido que tiene lugar en el espacio exterior. Se trata de estrellas que, luego de vivir millones de años, disminuyen los elementos químicos que promueven su combustión (hidrógeno y helio, principalmente) hasta agotarlos.
 

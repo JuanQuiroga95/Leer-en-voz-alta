@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { NIVELES_DIFICULTAD, normalizarDificultad, COLOR_DIFICULTAD } from "@/lib/colecciones";
 
 type ViewMode = "general" | "curso" | "alumno" | "asignaciones";
 
@@ -75,10 +76,19 @@ export default function ProfesorPanel() {
 
   // Asignaciones form state
   const [asigTextId, setAsigTextId] = useState("");
+  // Filtros de la biblioteca: con ~30 textos, elegir de una lista plana es inviable.
+  const [filtroAnio, setFiltroAnio] = useState("");
+  const [filtroDificultad, setFiltroDificultad] = useState("");
   const [asigMode, setAsigMode] = useState("EVALUACION");
   const [asigTargetType, setAsigTargetType] = useState("division");
   const [asigDivision, setAsigDivision] = useState("");
   const [asigUserId, setAsigUserId] = useState("");
+
+  const textosFiltrados = texts.filter(t => {
+    if (filtroAnio && String(t.year) !== filtroAnio) return false;
+    if (filtroDificultad && normalizarDificultad(t.level) !== filtroDificultad) return false;
+    return true;
+  });
 
   const fetchDashboard = () => {
     setLoading(true);
@@ -733,9 +743,25 @@ export default function ProfesorPanel() {
                     <div style={S.cardTitle}>Nueva Asignación</div>
                     <div style={S.formGroup}>
                       <label style={S.label}>Texto a asignar</label>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <select style={{ ...S.select, flex: 1 }} value={filtroAnio} onChange={e => { setFiltroAnio(e.target.value); setAsigTextId(""); }}>
+                          <option value="">Todos los años</option>
+                          {[1, 2, 3, 4, 5].map(a => <option key={a} value={String(a)}>{a}° año</option>)}
+                        </select>
+                        <select style={{ ...S.select, flex: 1 }} value={filtroDificultad} onChange={e => { setFiltroDificultad(e.target.value); setAsigTextId(""); }}>
+                          <option value="">Toda dificultad</option>
+                          {NIVELES_DIFICULTAD.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
                       <select style={S.select} value={asigTextId} onChange={e => setAsigTextId(e.target.value)}>
-                        <option value="">Seleccione un texto...</option>
-                        {texts.map(t => <option key={t.id} value={t.id}>{t.title} (Nivel: {t.level})</option>)}
+                        <option value="">
+                          {textosFiltrados.length === 0 ? "No hay textos con esos filtros" : `Seleccione un texto (${textosFiltrados.length} disponibles)...`}
+                        </option>
+                        {textosFiltrados.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.year}° · {normalizarDificultad(t.level)} · {t.title}
+                          </option>
+                        ))}
                       </select>
                     </div>
 

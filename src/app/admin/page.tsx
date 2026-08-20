@@ -16,6 +16,14 @@ export default function AdminPanel() {
   const [formData, setFormData] = useState({ name: '', legajo: '', division: '', role: 'ALUMNO', password: '' });
   const [uploadingCSV, setUploadingCSV] = useState(false);
   const [seedingCenso, setSeedingCenso] = useState<string | null>(null);
+  const [colecciones, setColecciones] = useState<{ clave: string; nombre: string; descripcion: string; total: number; yaCargados: number }[]>([]);
+
+  const fetchColecciones = () => {
+    fetch('/api/admin/seed-censo')
+      .then(r => r.json())
+      .then(d => { if (d.colecciones) setColecciones(d.colecciones); })
+      .catch(() => { /* el panel sigue siendo usable sin esto */ });
+  };
 
   const fetchData = () => {
     fetch('/api/admin/users')
@@ -34,6 +42,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     fetchData();
+    fetchColecciones();
   }, []);
 
   const totalUsers = users.length;
@@ -171,6 +180,7 @@ export default function AdminPanel() {
       const data = await res.json();
       if (res.ok) {
         alert(data.mensaje);
+        fetchColecciones();
       } else {
         alert(data.error || 'Error al cargar los textos');
       }
@@ -259,19 +269,31 @@ export default function AdminPanel() {
                 Colecciones listas para cargar. Se agregan a la pestaña Práctica del año que corresponde y no se duplican si ya estaban.
               </p>
             </div>
-            <div className="panel-toolbar-actions">
-              {[
-                { set: 'censo2023', nombre: 'Censo de Fluidez Lectora 2023', etiqueta: '📚 Censo 2023 (5 textos)' },
-                { set: 'videla', nombre: 'Fluidez Lectora Videla', etiqueta: '📖 Fluidez Videla (10 textos)' },
-              ].map(({ set, nombre, etiqueta }) => {
-                const cargando = seedingCenso === set;
-                return (
-                  <button key={set} onClick={() => handleSeedTextos(set, nombre)} disabled={seedingCenso !== null} style={{ padding: '10px 24px', background: seedingCenso !== null ? '#a0aec0' : 'linear-gradient(135deg, #38a169 0%, #2f855a 100%)', color: 'white', border: 'none', borderRadius: '12px', cursor: seedingCenso !== null ? 'wait' : 'pointer', fontWeight: 600, boxShadow: '0 4px 15px rgba(47, 133, 90, 0.3)' }}>
-                    {cargando ? 'Cargando textos...' : etiqueta}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 16, marginTop: 16 }}>
+            {colecciones.map(c => {
+              const cargando = seedingCenso === c.clave;
+              const completa = c.yaCargados === c.total;
+              return (
+                <div key={c.clave} style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, color: '#2d3748' }}>{c.nombre}</div>
+                    <div style={{ fontSize: 13, color: '#718096', marginTop: 4 }}>{c.descripcion}</div>
+                  </div>
+                  <div style={{ fontSize: 13, color: completa ? '#2f855a' : '#b7791f', fontWeight: 600 }}>
+                    {completa ? `✓ ${c.total} textos cargados` : `${c.yaCargados} de ${c.total} cargados`}
+                  </div>
+                  <button
+                    onClick={() => handleSeedTextos(c.clave, c.nombre)}
+                    disabled={seedingCenso !== null || completa}
+                    style={{ padding: '10px 16px', background: completa ? '#e2e8f0' : seedingCenso !== null ? '#a0aec0' : 'linear-gradient(135deg, #38a169 0%, #2f855a 100%)', color: completa ? '#718096' : 'white', border: 'none', borderRadius: 10, cursor: completa ? 'default' : seedingCenso !== null ? 'wait' : 'pointer', fontWeight: 600 }}
+                  >
+                    {cargando ? 'Cargando…' : completa ? 'Ya está cargada' : `Cargar ${c.total} textos`}
                   </button>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
         </section>
 

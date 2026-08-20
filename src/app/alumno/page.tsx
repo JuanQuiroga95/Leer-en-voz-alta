@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAudioRecorder } from "@/lib/useAudioRecorder";
 import { fileNameForMimeType } from "@/lib/audioFormat";
 import { tokenizeText, matchWords, calculatePPM, getPerformanceLevel, getComprehensionLevel } from "@/lib/textMatcher";
+import { normalizarDificultad, COLOR_DIFICULTAD } from "@/lib/colecciones";
 import type { WordMatch } from "@/lib/textMatcher";
 import { useRouter } from "next/navigation";
 
@@ -400,7 +401,7 @@ export default function AlumnoPanel() {
               currentTexts.map(t => {
                 const completado = t.progress?.length > 0 && t.progress[0].status === "COMPLETADO";
                 return (
-                  <div key={t.assignmentId} className="texto-card" style={{ borderLeft: `4px solid ${activeTab === 'EVALUACION' ? '#fb7185' : '#3b82f6'}` }}>
+                  <div key={`${t.id}-${t.mode}`} className="texto-card" style={{ borderLeft: `4px solid ${activeTab === 'EVALUACION' ? '#fb7185' : '#3b82f6'}` }}>
                     <div className="tc-head" onClick={() => !completado && goTexto(t)}>
                       <div className="tc-icono">{completado ? "🌙" : "🦁"}</div>
                       <div className="tc-info">
@@ -415,6 +416,11 @@ export default function AlumnoPanel() {
                         <span className="tag pendiente">Pendiente</span>
                       )}
                       <span className="tag retos">{t.challenges.length} retos</span>
+                      {(() => {
+                        const dif = normalizarDificultad(t.level);
+                        const c = COLOR_DIFICULTAD[dif];
+                        return <span className="tag" style={{ color: c.texto, background: c.fondo }}>{dif}</span>;
+                      })()}
                     </div>
                     {completado && activeTab === "PRACTICA" && (
                       <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: 10, textAlign: 'right' }}>

@@ -1,7 +1,19 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { anioDeDivision, normalizarDificultad } from '@/lib/colecciones';
 
+/**
+ * Textos que ve un alumno, separados en Práctica y Evaluación.
+ *
+ * PRÁCTICA: todos los textos del año del alumno, sin que nadie tenga que
+ * asignarlos. Un alumno nuevo de 1° ve los textos de 1° apenas entra. Se suman
+ * los textos que el profesor le haya asignado a mano como práctica, aunque sean
+ * de otro año (por ejemplo, uno más fácil para alguien que necesita reforzar).
+ *
+ * EVALUACIÓN: solo lo que el profesor asigna explícitamente. Estas afectan las
+ * estadísticas y solo el profesor puede reiniciarlas, así que nunca son automáticas.
+ */
 export async function GET() {
   const session = await getSession();
   if (!session || session.role !== 'ALUMNO') {
@@ -9,58 +21,79 @@ export async function GET() {
   }
 
   try {
-    // Obtener el alumno para saber su división
     const alumno = await prisma.user.findUnique({
       where: { id: session.userId },
-      select: { division: true }
+      select: { division: true },
     });
 
-    // Buscar asignaciones para este alumno (por userId o por división)
+    const anio = anioDeDivision(alumno?.division);
+
     const assignments = await prisma.textAssignment.findMany({
       where: {
         OR: [
           { userId: session.userId },
           ...(alumno?.division ? [{ division: alumno.division }] : []),
-        ]
+        ],
       },
       include: {
         text: {
           include: {
             challenges: true,
-            progress: {
-              where: { userId: session.userId }
-            }
-          }
-        }
-      }
+            progress: { where: { userId: session.userId } },
+          },
+        },
+      },
     });
 
-    // Separar por modo y deduplicar por textId+mode
-    const seen = new Set<string>();
-    const evaluacion: any[] = [];
-    const practica: any[] = [];
+    // Textos del año del alumno: la base de la pestaña Práctica.
+    const textosDelAnio = anio
+      ? await prisma.text.findMany({
+          where: { year: anio },
+          include: {
+            challenges: true,
+            progress: { where: { userId: session.userId } },
+          },
+          orderBy: [{ level: 'asc' }, { title: 'asc' }],
+        })
+      : [];
 
-    for (const a of assignments) {
-      const key = `${a.textId}-${a.mode}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+    type TextoConModo = (typeof textosDelAnio)[number] & {
+      mode: string;
+      assignmentId: string | null;
+      dificultad: string;
+    };
 
-      const textWithMode = {
-        ...a.text,
-        mode: a.mode,
-        assignmentId: a.id,
-        // Filtrar progreso por modo
-        progress: a.text.progress.filter((p: any) => p.mode === a.mode)
+    const evaluacion: TextoConModo[] = [];
+    const practica: TextoConModo[] = [];
+    const vistos = new Set<string>();
+
+    const agregar = (
+      texto: (typeof textosDelAnio)[number],
+      mode: string,
+      assignmentId: string | null
+    ) => {
+      const clave = `${texto.id}-${mode}`;
+      if (vistos.has(clave)) return;
+      vistos.add(clave);
+
+      const entrada: TextoConModo = {
+        ...texto,
+        mode,
+        assignmentId,
+        dificultad: normalizarDificultad(texto.level),
+        progress: texto.progress.filter(p => p.mode === mode),
       };
 
-      if (a.mode === 'EVALUACION') {
-        evaluacion.push(textWithMode);
-      } else {
-        practica.push(textWithMode);
-      }
-    }
+      if (mode === 'EVALUACION') evaluacion.push(entrada);
+      else practica.push(entrada);
+    };
 
-    return NextResponse.json({ evaluacion, practica, alumno });
+    // Las asignaciones explícitas van primero: si el profesor asignó un texto,
+    // queremos conservar su assignmentId y no la versión automática.
+    for (const a of assignments) agregar(a.text, a.mode, a.id);
+    for (const t of textosDelAnio) agregar(t, 'PRACTICA', null);
+
+    return NextResponse.json({ evaluacion, practica, alumno: { ...alumno, anio } });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Error fetching texts' }, { status: 500 });
