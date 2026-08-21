@@ -201,15 +201,35 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
     }
   };
 
+  /**
+   * Baja un archivo de EJEMPLO para saber qué formato espera la importación.
+   * No son los usuarios cargados: para eso está handleExportarUsuarios.
+   *
+   * Va con punto y coma y con BOM porque el Excel en español separa por punto y
+   * coma; con comas abre todo amontonado en una sola columna.
+   */
   const handleDownloadTemplate = () => {
-    const csvContent = "data:text/csv;charset=utf-8,nombre,division,rol\nJuan Quiroga,2° 1ra,ALUMNO\nMaria Perez,3° 2da,ALUMNO\nCarlos Docente,,PROFESOR";
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "plantilla_usuarios.csv");
+    const filas = [
+      'nombre;division;rol',
+      'Juan Quiroga;2° 1ra;ALUMNO',
+      'Maria Perez;3° 2da;ALUMNO',
+      'Carlos Docente;;PROFESOR',
+    ].join('\r\n');
+
+    const blob = new Blob(['﻿' + filas], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'plantilla-ejemplo.csv';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /** Baja los usuarios REALES que hay cargados. Sirve para comprobar una importación. */
+  const handleExportarUsuarios = () => {
+    window.location.href = '/api/admin/users?formato=csv';
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,10 +259,17 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
       const usersToCreate: { name: string; division: string; role: string }[] = [];
       const ignoradas: string[] = [];
 
+      // El separador se detecta en vez de darlo por sentado: el Excel en español
+      // guarda con punto y coma, así que un archivo bajado de acá, abierto y
+      // vuelto a guardar deja de tener comas y antes eso lo rompía.
+      const puntoYComa = (lines[0].match(/;/g) || []).length;
+      const comas = (lines[0].match(/,/g) || []).length;
+      const sep = puntoYComa > comas ? ';' : ',';
+
       const startIdx = lines[0].toLowerCase().includes('nombre') ? 1 : 0;
 
       for (let i = startIdx; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
+        const cols = lines[i].split(sep).map(c => c.trim().replace(/^"|"$/g, ''));
         if (!cols[0]) {
           ignoradas.push(`Línea ${i + 1}: sin nombre`);
           continue;
@@ -605,10 +632,18 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
 
         <section className="panel-card panel-card-lg">
           <div className="panel-toolbar">
-            <h2>Gestión de Usuarios</h2>
+            <div>
+              <h2>Gestión de Usuarios</h2>
+              <p style={{ margin: '6px 0 0 0', color: '#718096', fontSize: '14px' }}>
+                {users.length} cargados · {totalStudents} alumnos · {totalTeachers} profesores
+              </p>
+            </div>
             <div className="panel-toolbar-actions">
-              <button onClick={handleDownloadTemplate} style={{ padding: '10px 16px', background: '#edf2f7', color: '#4a5568', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}>
-                Descargar Plantilla CSV
+              <button onClick={handleExportarUsuarios} style={{ padding: '10px 16px', background: '#ebf8ff', color: '#2c5282', border: '1px solid #bee3f8', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}>
+                ⬇️ Exportar usuarios
+              </button>
+              <button onClick={handleDownloadTemplate} style={{ padding: '10px 16px', background: '#edf2f7', color: '#4a5568', border: '1px solid #e2e8f0', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }} title="Archivo de ejemplo con el formato que espera la importación. No son tus usuarios.">
+                Plantilla de ejemplo
               </button>
               <label style={{ padding: '10px 16px', background: '#e2e8f0', color: '#2d3748', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, display: 'inline-block' }}>
                 {uploadingCSV ? 'Subiendo...' : '📤 Subir CSV'}

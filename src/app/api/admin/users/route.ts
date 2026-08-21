@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { armarCsv } from '@/lib/reportes';
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await getSession();
   if (!session || session.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
+    const formato = new URL(request.url).searchParams.get('formato');
+
     const users = await prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       select: {
@@ -20,8 +23,33 @@ export async function GET() {
         createdAt: true
       }
     });
-    
-    return NextResponse.json({ users });
+
+    // Exportacion real de los usuarios cargados, que es distinto de la plantilla
+    // de ejemplo: sirve para comprobar que una importacion entro completa.
+    if (formato === 'csv') {
+      const ordenados = [...users].sort((a, b) =>
+        (a.division || '').localeCompare(b.division || '') || a.name.localeCompare(b.name)
+      );
+      const csv = armarCsv(
+        ['Nombre', 'Legajo', 'Curso', 'Rol', 'Fecha de alta'],
+        ordenados.map(u => [
+          u.name,
+          u.legajo,
+          u.division || '',
+          u.role,
+          u.createdAt.toLocaleDateString('es-AR'),
+        ])
+      );
+      // El BOM es lo que hace que Excel abra los acentos bien en español.
+      return new NextResponse('﻿' + csv, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="usuarios-${new Date().toISOString().slice(0, 10)}.csv"`,
+        },
+      });
+    }
+
+    return NextResponse.json({ users, total: users.length });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Error fetching users' }, { status: 500 });
