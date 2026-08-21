@@ -135,6 +135,14 @@ export async function GET(request: NextRequest) {
       filas,
     });
   } catch (error: any) {
+    // P2021 = la tabla no existe todavia. Pasa si el deploy no pudo sincronizar
+    // el esquema; conviene decirlo con claridad y no como un error generico.
+    if (error?.code === 'P2021') {
+      return NextResponse.json({
+        error: 'El registro de ingresos todavía no está disponible: falta crear la tabla en la base de datos. Se crea sola en el próximo despliegue.',
+        faltaTabla: true,
+      }, { status: 503 });
+    }
     console.error('Error armando el registro de ingresos:', error);
     return NextResponse.json({ error: error?.message || 'Error al leer los ingresos' }, { status: 500 });
   }

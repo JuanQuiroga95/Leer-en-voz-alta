@@ -98,12 +98,20 @@ export async function GET(request: NextRequest) {
       const reporte = armarReporteAlumno(progresos.map(aLectura), anio);
       const informe = redactarInforme(alumno.name, reporte, anio);
 
-      const ingresos = await prisma.loginEvent.count({ where: { userId } });
-      const ultimoIngreso = await prisma.loginEvent.findFirst({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      });
+      // Si la tabla de ingresos todavia no existe, el informe se arma igual:
+      // es un dato secundario y no puede impedir que el profe mande la devolucion.
+      let ingresos = 0;
+      let ultimoIngreso: { createdAt: Date } | null = null;
+      try {
+        ingresos = await prisma.loginEvent.count({ where: { userId } });
+        ultimoIngreso = await prisma.loginEvent.findFirst({
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true },
+        });
+      } catch (e: any) {
+        if (e?.code !== 'P2021') throw e;
+      }
 
       if (formato === 'csv') {
         const csv = armarCsv(
@@ -133,10 +141,23 @@ export async function GET(request: NextRequest) {
       select: {
         id: true, name: true, legajo: true, division: true,
         progress: { where: filtroFecha, include: incluirTexto, orderBy: { updatedAt: 'asc' } },
-        _count: { select: { logins: true } },
       },
       orderBy: [{ division: 'asc' }, { name: 'asc' }],
     });
+
+    // Los ingresos se consultan aparte y tolerando que la tabla no exista: es un
+    // dato secundario y no puede impedir que salga el reporte del curso.
+    const ingresosPorAlumno = new Map<string, number>();
+    try {
+      const grupos = await prisma.loginEvent.groupBy({
+        by: ['userId'],
+        where: { userId: { in: alumnos.map(a => a.id) } },
+        _count: { _all: true },
+      });
+      for (const g of grupos) ingresosPorAlumno.set(g.userId, g._count._all);
+    } catch (e: any) {
+      if (e?.code !== 'P2021') throw e;
+    }
 
     const filas = alumnos.map(a => {
       const anio = anioDeDivision(a.division);
@@ -155,7 +176,7 @@ export async function GET(request: NextRequest) {
         nivel: r.nivel,
         tendencia: r.tendencia,
         objetivo: r.objetivo,
-        ingresos: a._count.logins,
+        ingresos: ingresosPorAlumno.get(a.id) ?? 0,
       };
     });
 

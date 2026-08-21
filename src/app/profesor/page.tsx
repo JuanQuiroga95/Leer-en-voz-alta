@@ -268,6 +268,7 @@ export default function ProfesorPanel() {
   const [repDivision, setRepDivision] = useState("");
   const [repUserId, setRepUserId] = useState("");
   const [ingresos, setIngresos] = useState<any>(null);
+  const [ingresosError, setIngresosError] = useState<string | null>(null);
   const [ingresosDivision, setIngresosDivision] = useState("");
   const [ingresosDias, setIngresosDias] = useState(30);
   const [ingresosCargando, setIngresosCargando] = useState(false);
@@ -286,8 +287,8 @@ export default function ProfesorPanel() {
     if (division) qs.set('division', division);
     fetch(`/api/profesor/ingresos?${qs}`)
       .then(r => r.json())
-      .then(d => setIngresos(d.error ? null : d))
-      .catch(() => setIngresos(null))
+      .then(d => { setIngresos(d.error ? null : d); setIngresosError(d.error || null); })
+      .catch(() => { setIngresos(null); setIngresosError('No se pudo conectar con el servidor.'); })
       .finally(() => setIngresosCargando(false));
   };
 
@@ -967,6 +968,8 @@ export default function ProfesorPanel() {
 
                 {ingresosCargando ? (
                   <div style={{ color: "#94a3b8", padding: 20 }}>Cargando…</div>
+                ) : ingresosError ? (
+                  <div style={{ color: "#fbbf24", padding: 20, lineHeight: 1.6 }}>{ingresosError}</div>
                 ) : !ingresos ? (
                   <div style={{ color: "#94a3b8", padding: 20 }}>Elegí un curso para ver los ingresos.</div>
                 ) : (
