@@ -518,7 +518,7 @@ export default function ProfesorPanel() {
                     <thead>
                       <tr>
                         <th style={S.th}>Alumno</th>
-                        <th style={S.th}>Legajo</th>
+                        <th style={S.th}>Usuario</th>
                         <th style={S.th}>Evaluaciones</th>
                         <th style={S.th}>PPM Prom.</th>
                         <th style={S.th}>Fluidez</th>

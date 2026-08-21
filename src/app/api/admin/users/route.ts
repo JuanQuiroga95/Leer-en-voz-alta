@@ -3,6 +3,9 @@ import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { armarCsv } from '@/lib/reportes';
 
+/** Contraseña con la que se crean los usuarios nuevos. */
+const CONTRASENA_POR_DEFECTO = '123456';
+
 export async function GET(request: Request) {
   const session = await getSession();
   if (!session || session.role !== 'ADMIN') {
@@ -20,7 +23,10 @@ export async function GET(request: Request) {
         name: true,
         role: true,
         division: true,
-        createdAt: true
+        createdAt: true,
+        // Solo para la exportacion, y nunca se devuelve: se usa para saber si la
+        // contraseña sigue siendo la de fabrica. Ver mas abajo.
+        ...(formato === 'csv' ? { password: true } : {}),
       }
     });
 
@@ -30,11 +36,36 @@ export async function GET(request: Request) {
       const ordenados = [...users].sort((a, b) =>
         (a.division || '').localeCompare(b.division || '') || a.name.localeCompare(b.name)
       );
+
+      // Las contraseñas se guardan encriptadas y no se pueden leer, asi que no se
+      // puede "exportar la contraseña" de alguien que ya la cambio. Lo que si se
+      // puede es comprobar si todavia es la de fabrica, y en ese caso mostrarla.
+      // Al que ya la cambio se le avisa, en vez de imprimir una contraseña que no
+      // funciona y hacer perder tiempo al profe frente al curso.
+      const bcrypt = await import('bcryptjs');
+      const contrasenas = await Promise.all(
+        ordenados.map(async u => {
+          const hash = (u as { password?: string }).password;
+          // Se comprueba que sea un hash de bcrypt antes de comparar: `compare`
+          // devuelve false ante cualquier texto raro, y eso se leería como
+          // "ya la cambió" cuando en realidad no sabemos qué pasó.
+          if (!hash || !/^\$2[aby]\$/.test(hash)) return '(no se pudo saber)';
+          try {
+            return (await bcrypt.compare(CONTRASENA_POR_DEFECTO, hash))
+              ? CONTRASENA_POR_DEFECTO
+              : '(ya la cambió)';
+          } catch {
+            return '(no se pudo saber)';
+          }
+        })
+      );
+
       const csv = armarCsv(
-        ['Nombre', 'Legajo', 'Curso', 'Rol', 'Fecha de alta'],
-        ordenados.map(u => [
+        ['Nombre', 'Usuario', 'Contraseña', 'Curso', 'Rol', 'Fecha de alta'],
+        ordenados.map((u, i) => [
           u.name,
           u.legajo,
+          contrasenas[i],
           u.division || '',
           u.role,
           u.createdAt.toLocaleDateString('es-AR'),
@@ -79,7 +110,7 @@ export async function POST(request: Request) {
     
     // Using bcrypt to hash the default password once for performance
     const bcrypt = require('bcryptjs');
-    const defaultPasswordHash = await bcrypt.hash('123456', 10);
+    const defaultPasswordHash = await bcrypt.hash(CONTRASENA_POR_DEFECTO, 10);
 
     const existingUsers = await prisma.user.findMany({ select: { legajo: true, name: true, division: true } });
     const legajosSet = new Set(existingUsers.map(u => u.legajo));

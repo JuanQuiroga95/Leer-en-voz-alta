@@ -50,7 +50,7 @@ export default function Login() {
             <h3>Ingresá a tu cuenta</h3>
             {error && <div style={{ color: 'red', marginBottom: '10px', fontSize: '14px', textAlign: 'center' }}>{error}</div>}
             <div className="campo">
-              <label>Usuario (Legajo)</label>
+              <label>Usuario</label>
               <input 
                 type="text" 
                 value={legajo}

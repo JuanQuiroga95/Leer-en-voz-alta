@@ -227,8 +227,20 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
     URL.revokeObjectURL(url);
   };
 
-  /** Baja los usuarios REALES que hay cargados. Sirve para comprobar una importación. */
+  /**
+   * Baja los usuarios REALES que hay cargados, con su contraseña.
+   * Sirve para comprobar una importación y para repartir las credenciales.
+   *
+   * Se avisa antes porque el archivo queda en la carpeta de Descargas con los
+   * datos de acceso de menores: conviene que sea una decisión consciente y no
+   * el resultado de un clic distraído.
+   */
   const handleExportarUsuarios = () => {
+    if (!confirm(
+      'El archivo incluye el usuario y la contraseña de cada persona.\n\n' +
+      'Guardalo en un lugar seguro y borralo cuando termines de repartir los accesos.\n\n' +
+      '¿Descargar?'
+    )) return;
     window.location.href = '/api/admin/users?formato=csv';
   };
 
@@ -309,7 +321,7 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
         if (res.ok) {
           const repetidos = data.duplicados?.length || 0;
           alert(
-            `Se crearon ${data.count} alumnos con la contraseña 123456. Los legajos se generaron solos.` +
+            `Se crearon ${data.count} alumnos con la contraseña 123456. Los usuarios se generaron solos.` +
             (repetidos ? `\n\nSe saltearon ${repetidos} que ya estaban cargados en ese mismo curso.` : '') +
             (ignoradas.length ? `\n\nLíneas ignoradas: ${ignoradas.length}.` : '')
           );
@@ -663,7 +675,7 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
                 <thead>
                   <tr style={{ color: '#a0aec0', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                     <th style={{ padding: '0 20px', textAlign: 'left', fontWeight: 600 }}>Usuario</th>
-                    <th style={{ padding: '0 20px', textAlign: 'left', fontWeight: 600 }}>Legajo</th>
+                    <th style={{ padding: '0 20px', textAlign: 'left', fontWeight: 600 }}>Usuario</th>
                     <th style={{ padding: '0 20px', textAlign: 'left', fontWeight: 600 }}>Rol</th>
                     <th style={{ padding: '0 20px', textAlign: 'center', fontWeight: 600 }}>Acciones</th>
                   </tr>
@@ -718,7 +730,7 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
               
               <div style={{ display: 'flex', gap: '15px' }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Legajo {isCreating && '(Auto)'}</label>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#718096', textTransform: 'uppercase' }}>Usuario {isCreating && '(se genera solo)'}</label>
                   <input value={formData.legajo} onChange={e => setFormData({...formData, legajo: e.target.value})} placeholder={isCreating ? 'Se genera solo si está vacío' : ''} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '5px' }} />
                 </div>
                 <div style={{ flex: 1 }}>
