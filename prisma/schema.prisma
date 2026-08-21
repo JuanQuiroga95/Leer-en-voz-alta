@@ -22,7 +22,28 @@ model User {
   progress  ReadingProgress[]
   trophies  Trophy[]
   assignments TextAssignment[]
+  logins    LoginEvent[]
   createdAt DateTime @default(now())
+}
+
+// Registro de ingresos a la plataforma, para que el profesor pueda ver quien
+// entro y cuando. Es una tabla aparte y no un campo "ultimoIngreso" en User
+// porque lo util es el historial: saber que un alumno entro tres veces esta
+// semana dice mucho mas que la fecha del ultimo ingreso.
+model LoginEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // Se guardan copiados y no por relacion a proposito: si despues cambian al
+  // alumno de curso, el historial debe seguir mostrando en que curso estaba
+  // cuando entro, no el actual.
+  division  String?
+  role      Role
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model Text {

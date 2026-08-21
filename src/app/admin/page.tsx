@@ -295,7 +295,7 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
         <header className="panel-header">
           <div>
             <h1>Panel de Administración</h1>
-            <p>Sistema Leer en Voz Alta · Universo Videla</p>
+            <p>Sistema Lectura en Movimiento · Universo Videla</p>
           </div>
           <button onClick={handleLogout} style={{ padding: '10px 20px', background: '#ff4b4b', color: 'white', border: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600, boxShadow: '0 4px 14px rgba(255, 75, 75, 0.4)', transition: 'all 0.2s' }}>
             Cerrar Sesión

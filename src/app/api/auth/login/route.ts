@@ -27,7 +27,18 @@ export async function POST(request: Request) {
 
     await createSession(user.id, user.legajo, user.role);
 
-    return NextResponse.json({ 
+    // Queda registrado para que el profesor pueda ver quién entró y cuándo.
+    // Si esto falla no se corta el login: un problema al registrar la visita
+    // nunca puede dejar a un alumno afuera de la clase.
+    try {
+      await prisma.loginEvent.create({
+        data: { userId: user.id, division: user.division, role: user.role },
+      });
+    } catch (e) {
+      console.error('No se pudo registrar el ingreso:', e);
+    }
+
+    return NextResponse.json({
       success: true, 
       role: user.role,
       redirect: user.role === 'ADMIN' ? '/admin' : user.role === 'PROFESOR' ? '/profesor' : '/alumno'

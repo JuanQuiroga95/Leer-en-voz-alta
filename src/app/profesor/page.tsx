@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { NIVELES_DIFICULTAD, normalizarDificultad, COLOR_DIFICULTAD } from "@/lib/colecciones";
 
-type ViewMode = "general" | "curso" | "alumno" | "asignaciones";
+type ViewMode = "general" | "curso" | "alumno" | "asignaciones" | "reportes" | "ingresos";
 
 // ────────────────────── Helpers ──────────────────────
 function getLevelBadge(ppm: number | undefined) {
@@ -41,6 +41,18 @@ const S = {
   card: { background: "rgba(30, 41, 59, 0.7)", borderRadius: 16, padding: "24px", border: "1px solid rgba(148, 163, 184, 0.1)", marginBottom: 16, backdropFilter: "blur(8px)", overflowX: "auto" } as React.CSSProperties,
   cardTitle: { fontSize: 16, fontWeight: 800, color: "#f1f5f9", marginBottom: 16 },
   table: { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
+  btnPrimario: (activo: boolean) => ({
+    padding: "10px 18px", borderRadius: 10, fontWeight: 600, fontSize: 14, border: "none",
+    background: activo ? "#3b82f6" : "rgba(148,163,184,0.2)",
+    color: activo ? "white" : "#64748b",
+    cursor: activo ? "pointer" : "default",
+  }),
+  btnSecundario: (activo: boolean) => ({
+    padding: "10px 18px", borderRadius: 10, fontWeight: 600, fontSize: 14,
+    border: "1px solid rgba(148,163,184,0.3)", background: "transparent",
+    color: activo ? "#cbd5e1" : "#64748b",
+    cursor: activo ? "pointer" : "default",
+  }),
   th: { padding: "10px 12px", textAlign: "left" as const, fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" as const, letterSpacing: 0.5, borderBottom: "1px solid rgba(148, 163, 184, 0.15)" },
   td: { padding: "12px", borderBottom: "1px solid rgba(148, 163, 184, 0.08)", color: "#cbd5e1" },
   badge: (color: string, bg: string) => ({ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color, background: bg }),
@@ -252,6 +264,33 @@ export default function ProfesorPanel() {
   const goGeneral = () => { setView("general"); setSelectedDivision(null); setSelectedStudent(null); };
   const goCurso = (div: string) => { setView("curso"); setSelectedDivision(div); setSelectedStudent(null); };
   const goAlumno = (student: any) => { setView("alumno"); setSelectedStudent(student); };
+  // ── Reportes e ingresos ──
+  const [repDivision, setRepDivision] = useState("");
+  const [repUserId, setRepUserId] = useState("");
+  const [ingresos, setIngresos] = useState<any>(null);
+  const [ingresosDivision, setIngresosDivision] = useState("");
+  const [ingresosDias, setIngresosDias] = useState(30);
+  const [ingresosCargando, setIngresosCargando] = useState(false);
+
+  const abrirReporte = (params: Record<string, string>) => {
+    window.open(`/profesor/reporte?${new URLSearchParams(params)}`, '_blank');
+  };
+
+  const bajarCsv = (ruta: string, params: Record<string, string>) => {
+    window.location.href = `${ruta}?${new URLSearchParams({ ...params, formato: 'csv' })}`;
+  };
+
+  const cargarIngresos = (division: string, dias = ingresosDias) => {
+    setIngresosCargando(true);
+    const qs = new URLSearchParams({ dias: String(dias) });
+    if (division) qs.set('division', division);
+    fetch(`/api/profesor/ingresos?${qs}`)
+      .then(r => r.json())
+      .then(d => setIngresos(d.error ? null : d))
+      .catch(() => setIngresos(null))
+      .finally(() => setIngresosCargando(false));
+  };
+
   const goAsignaciones = () => { setView("asignaciones"); setSelectedDivision(null); setSelectedStudent(null); };
 
   // ────────────────────────────────────────────────────────
@@ -280,6 +319,8 @@ export default function ProfesorPanel() {
           <button style={S.tab(view === "curso")} onClick={() => { if (divisions.length > 0) goCurso(selectedDivision || divisions[0]); }}>🏫 Por Curso</button>
           <button style={S.tab(view === "alumno")} onClick={() => setView("alumno")}>👤 Por Alumno</button>
           <button style={S.tab(view === "asignaciones")} onClick={goAsignaciones}>📝 Asignar Textos</button>
+          <button style={S.tab(view === "reportes")} onClick={() => setView("reportes")}>📄 Reportes</button>
+          <button style={S.tab(view === "ingresos")} onClick={() => { setView("ingresos"); cargarIngresos(ingresosDivision); }}>🕒 Ingresos</button>
         </div>
 
         {loading ? (
@@ -842,6 +883,134 @@ export default function ProfesorPanel() {
                   </div>
                 </div>
               </>
+            )}
+
+            {/* ═══════════ REPORTES ═══════════ */}
+            {view === "reportes" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 24 }}>
+
+                <div style={S.card}>
+                  <div style={S.cardTitle}>Informe de un alumno</div>
+                  <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 0 }}>
+                    Pensado para mandarle a la familia. Redacta el mensaje según cómo viene el chico, siempre en tono pedagógico.
+                  </p>
+                  <select style={S.select} value={repUserId} onChange={e => setRepUserId(e.target.value)}>
+                    <option value="">Elegí un alumno…</option>
+                    {students.map(s => <option key={s.id} value={s.id}>{s.name} · {s.division || "sin curso"}</option>)}
+                  </select>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    <button disabled={!repUserId} style={S.btnPrimario(!!repUserId)} onClick={() => abrirReporte({ tipo: "alumno", userId: repUserId })}>
+                      📄 Ver informe
+                    </button>
+                    <button disabled={!repUserId} style={S.btnSecundario(!!repUserId)} onClick={() => bajarCsv("/api/profesor/reporte", { tipo: "alumno", userId: repUserId })}>
+                      ⬇️ Planilla
+                    </button>
+                  </div>
+                </div>
+
+                <div style={S.card}>
+                  <div style={S.cardTitle}>Informe de un curso</div>
+                  <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 0 }}>
+                    Cómo viene el curso completo, con la distribución por nivel.
+                  </p>
+                  <select style={S.select} value={repDivision} onChange={e => setRepDivision(e.target.value)}>
+                    <option value="">Elegí un curso…</option>
+                    {allDivisions.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    <button disabled={!repDivision} style={S.btnPrimario(!!repDivision)} onClick={() => abrirReporte({ tipo: "curso", division: repDivision })}>
+                      📄 Ver informe
+                    </button>
+                    <button disabled={!repDivision} style={S.btnSecundario(!!repDivision)} onClick={() => bajarCsv("/api/profesor/reporte", { tipo: "curso", division: repDivision })}>
+                      ⬇️ Planilla
+                    </button>
+                  </div>
+                </div>
+
+                <div style={S.card}>
+                  <div style={S.cardTitle}>Informe general</div>
+                  <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 0 }}>
+                    Toda la escuela en una sola planilla, curso por curso.
+                  </p>
+                  <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                    <button style={S.btnPrimario(true)} onClick={() => abrirReporte({ tipo: "general" })}>📄 Ver informe</button>
+                    <button style={S.btnSecundario(true)} onClick={() => bajarCsv("/api/profesor/reporte", { tipo: "general" })}>⬇️ Planilla</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ═══════════ INGRESOS ═══════════ */}
+            {view === "ingresos" && (
+              <div style={S.card}>
+                <div style={S.cardTitle}>Registro de ingresos</div>
+                <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 0 }}>
+                  Quiénes están entrando a la plataforma. Solo se cuentan los ingresos desde que se activó esta función.
+                </p>
+
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                  <select style={{ ...S.select, maxWidth: 200 }} value={ingresosDivision}
+                    onChange={e => { setIngresosDivision(e.target.value); cargarIngresos(e.target.value); }}>
+                    <option value="">Todos los cursos</option>
+                    {allDivisions.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <select style={{ ...S.select, maxWidth: 170 }} value={ingresosDias}
+                    onChange={e => { const d = Number(e.target.value); setIngresosDias(d); cargarIngresos(ingresosDivision, d); }}>
+                    <option value={7}>Últimos 7 días</option>
+                    <option value={30}>Últimos 30 días</option>
+                    <option value={90}>Últimos 90 días</option>
+                  </select>
+                  <button style={S.btnSecundario(true)} onClick={() => bajarCsv("/api/profesor/ingresos", { division: ingresosDivision, dias: String(ingresosDias) })}>
+                    ⬇️ Planilla
+                  </button>
+                </div>
+
+                {ingresosCargando ? (
+                  <div style={{ color: "#94a3b8", padding: 20 }}>Cargando…</div>
+                ) : !ingresos ? (
+                  <div style={{ color: "#94a3b8", padding: 20 }}>Elegí un curso para ver los ingresos.</div>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 14, fontSize: 13 }}>
+                      <span><strong>{ingresos.resumen.alumnos}</strong> alumnos</span>
+                      <span style={{ color: "#6ee7b7" }}><strong>{ingresos.resumen.entraronEnRango}</strong> entraron en el período</span>
+                      <span style={{ color: "#fca5a5" }}><strong>{ingresos.resumen.nuncaEntraron}</strong> nunca entraron</span>
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr>
+                            <th style={S.th}>Alumno</th><th style={S.th}>Curso</th>
+                            <th style={S.th}>Ingresos</th><th style={S.th}>Último</th><th style={S.th}>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ingresos.filas.map((f: any) => {
+                            const nunca = f.ingresosTotales === 0;
+                            const alerta = nunca || (f.diasSinEntrar !== null && f.diasSinEntrar > 14);
+                            return (
+                              <tr key={f.id}>
+                                <td style={S.td}>{f.nombre}</td>
+                                <td style={S.td}>{f.division || "—"}</td>
+                                <td style={S.td}>{f.ingresosEnRango} <span style={{ color: "#64748b" }}>({f.ingresosTotales} total)</span></td>
+                                <td style={S.td}>{f.ultimoIngreso ? new Date(f.ultimoIngreso).toLocaleDateString("es-AR") : "—"}</td>
+                                <td style={S.td}>
+                                  <span style={S.badge(
+                                    alerta ? "#fca5a5" : "#6ee7b7",
+                                    alerta ? "rgba(239,68,68,0.12)" : "rgba(16,185,129,0.12)"
+                                  )}>
+                                    {nunca ? "Nunca entró" : f.diasSinEntrar === 0 ? "Hoy" : `Hace ${f.diasSinEntrar} días`}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </>
         )}

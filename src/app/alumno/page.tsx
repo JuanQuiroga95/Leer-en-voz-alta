@@ -355,7 +355,7 @@ export default function AlumnoPanel() {
 
   return (
     <>
-      <div className="sim-label">📱 Simulador — Leer en Voz Alta · Universo Videla</div>
+      <div className="sim-label">📱 Simulador — Lectura en Movimiento · Universo Videla</div>
 
       <div className="device">
         <div className="topbar">

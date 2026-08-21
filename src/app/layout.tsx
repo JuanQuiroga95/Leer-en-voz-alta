@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Leer en Voz Alta — Universo Videla",
+  title: "Lectura en Movimiento — Universo Videla",
   description: "Simulador de lectura en voz alta para la Escuela Secundaria N° 4-012 Ingeniero Ricardo Videla",
 };
 

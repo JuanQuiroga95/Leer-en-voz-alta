@@ -38,7 +38,7 @@ export default function Login() {
 
   return (
     <>
-      <div className="sim-label">📱 Simulador — Leer en Voz Alta · Universo Videla</div>
+      <div className="sim-label">📱 Simulador — Lectura en Movimiento · Universo Videla</div>
       <div className="device">
         <div className="screen active" id="s-login">
           <div className="login-logo">📖</div>
