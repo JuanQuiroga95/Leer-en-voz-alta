@@ -53,13 +53,28 @@ export async function POST(request: Request) {
     const bcrypt = require('bcryptjs');
     const defaultPasswordHash = await bcrypt.hash('123456', 10);
 
-    const existingUsers = await prisma.user.findMany({ select: { legajo: true } });
+    const existingUsers = await prisma.user.findMany({ select: { legajo: true, name: true, division: true } });
     const legajosSet = new Set(existingUsers.map(u => u.legajo));
 
+    // Clave para no cargar dos veces al mismo chico. Importar una lista de curso
+    // es algo que se reintenta (se corta la conexion, se duda de si funciono), y
+    // sin esto cada reintento duplica el curso entero.
+    const claveAlumno = (nombre: string, division?: string | null) =>
+      `${nombre.trim().toLowerCase().replace(/\s+/g, ' ')}|${(division || '').trim().toLowerCase()}`;
+    const yaExisten = new Set(existingUsers.map(u => claveAlumno(u.name, u.division)));
+
     const usersToCreate = [];
+    const duplicados: string[] = [];
 
     for (const input of usersInput) {
       if (!input.name) continue;
+
+      const clave = claveAlumno(input.name, input.division);
+      if (yaExisten.has(clave)) {
+        duplicados.push(input.name);
+        continue;
+      }
+      yaExisten.add(clave);
 
       let base = generateBaseLegajo(input.name);
       let counter = 1;
@@ -83,7 +98,12 @@ export async function POST(request: Request) {
       usersToCreate.map(data => prisma.user.create({ data }))
     );
 
-    return NextResponse.json({ message: 'Usuarios creados', count: createdUsers.length, users: createdUsers });
+    return NextResponse.json({
+      message: 'Usuarios creados',
+      count: createdUsers.length,
+      duplicados,
+      users: createdUsers,
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: 'Error creando usuarios' }, { status: 500 });

@@ -219,42 +219,81 @@ Esto NO se puede deshacer. ¿Continuar?`)) return;
     setUploadingCSV(true);
     const reader = new FileReader();
     reader.onload = async (evt) => {
-      const text = evt.target?.result as string;
-      const lines = text.split('\\n').map(l => l.trim()).filter(l => l.length > 0);
-      
-      const usersToCreate = [];
-      // skip header if present
-      const startIdx = lines[0].toLowerCase().includes('nombre') ? 1 : 0;
-      
-      for (let i = startIdx; i < lines.length; i++) {
-        const cols = lines[i].split(',').map(c => c.trim());
-        if (cols.length >= 1 && cols[0]) {
-          usersToCreate.push({
-            name: cols[0],
-            division: cols[1] || '',
-            role: cols[2] ? cols[2].toUpperCase() : 'ALUMNO'
-          });
-        }
+      // El BOM que agregan Excel y el Bloc de notas se pega a la primera celda y
+      // dejaría un nombre con un carácter invisible adelante.
+      const text = (evt.target?.result as string).replace(/^﻿/, '');
+
+      // Se parte por saltos de línea reales, aceptando los finales de Windows.
+      // Antes decía split('\\n'), que parte por una barra invertida seguida de "n":
+      // el archivo entero quedaba como una sola línea, se salteaba como encabezado
+      // y no se creaba nadie, sin ningún aviso.
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+      if (lines.length === 0) {
+        alert('El archivo está vacío.');
+        setUploadingCSV(false);
+        e.target.value = '';
+        return;
       }
 
-      if (usersToCreate.length > 0) {
-        try {
-          const res = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ users: usersToCreate })
-          });
-          const data = await res.json();
-          if (res.ok) {
-            alert(`Se crearon ${data.count} usuarios correctamente con contraseña por defecto '123456'. Los legajos se generaron automáticamente.`);
-            fetchData();
-          } else {
-            alert('Error al importar CSV');
-          }
-        } catch (err) {
-          alert('Error de conexión');
+      const usersToCreate: { name: string; division: string; role: string }[] = [];
+      const ignoradas: string[] = [];
+
+      const startIdx = lines[0].toLowerCase().includes('nombre') ? 1 : 0;
+
+      for (let i = startIdx; i < lines.length; i++) {
+        const cols = lines[i].split(',').map(c => c.trim());
+        if (!cols[0]) {
+          ignoradas.push(`Línea ${i + 1}: sin nombre`);
+          continue;
         }
+        usersToCreate.push({
+          name: cols[0],
+          division: cols[1] || '',
+          role: cols[2] ? cols[2].toUpperCase() : 'ALUMNO',
+        });
       }
+
+      if (usersToCreate.length === 0) {
+        alert(
+          `No se encontró ningún alumno en el archivo.\n\n` +
+          `Tiene que ser un CSV con una línea por alumno, así:\n` +
+          `nombre,division,rol\n` +
+          `Juan Quiroga,2° 1ra,ALUMNO`
+        );
+        setUploadingCSV(false);
+        e.target.value = '';
+        return;
+      }
+
+      if (!confirm(`Se encontraron ${usersToCreate.length} alumnos en el archivo. ¿Los creamos?`)) {
+        setUploadingCSV(false);
+        e.target.value = '';
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ users: usersToCreate })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const repetidos = data.duplicados?.length || 0;
+          alert(
+            `Se crearon ${data.count} alumnos con la contraseña 123456. Los legajos se generaron solos.` +
+            (repetidos ? `\n\nSe saltearon ${repetidos} que ya estaban cargados en ese mismo curso.` : '') +
+            (ignoradas.length ? `\n\nLíneas ignoradas: ${ignoradas.length}.` : '')
+          );
+          fetchData();
+        } else {
+          alert(data.error || 'No se pudo importar el archivo.');
+        }
+      } catch (err) {
+        alert('Error de conexión al importar el archivo.');
+      }
+
       setUploadingCSV(false);
       // clear input
       e.target.value = '';
